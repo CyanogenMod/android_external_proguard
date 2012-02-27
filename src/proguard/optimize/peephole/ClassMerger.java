@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -21,6 +21,7 @@
 package proguard.optimize.peephole;
 
 import proguard.classfile.*;
+import proguard.classfile.constant.ClassConstant;
 import proguard.classfile.constant.visitor.*;
 import proguard.classfile.editor.*;
 import proguard.classfile.util.*;
@@ -58,6 +59,8 @@ implements   ClassVisitor,
     private final boolean      allowAccessModification;
     private final boolean      mergeInterfacesAggressively;
     private final ClassVisitor extraClassVisitor;
+
+    private final MemberVisitor fieldOptimizationInfoCopier = new FieldOptimizationInfoCopier();
 
 
     /**
@@ -151,7 +154,7 @@ implements   ClassVisitor,
             // infinite recursion.
             (programClass.getAccessFlags() & ClassConstants.INTERNAL_ACC_ANNOTATTION) == 0 &&
 
-            // Only merge classes if we can change the access permissioms, or
+            // Only merge classes if we can change the access permissions, or
             // if they are in the same package, or
             // if they are public and don't contain or invoke package visible
             // class members.
@@ -235,11 +238,12 @@ implements   ClassVisitor,
             targetClass.u2accessFlags =
                 ((targetAccessFlags &
                   sourceAccessFlags) &
-                 (ClassConstants.INTERNAL_ACC_INTERFACE  |
+                 (ClassConstants.INTERNAL_ACC_INTERFACE |
                   ClassConstants.INTERNAL_ACC_ABSTRACT)) |
                 ((targetAccessFlags |
                   sourceAccessFlags) &
-                 (ClassConstants.INTERNAL_ACC_PUBLIC     |
+                 (ClassConstants.INTERNAL_ACC_PUBLIC      |
+                  ClassConstants.INTERNAL_ACC_SUPER       |
                   ClassConstants.INTERNAL_ACC_ANNOTATTION |
                   ClassConstants.INTERNAL_ACC_ENUM));
 
@@ -260,7 +264,7 @@ implements   ClassVisitor,
 
             // Copy over the class members.
             MemberAdder memberAdder =
-                new MemberAdder(targetClass);
+                new MemberAdder(targetClass, fieldOptimizationInfoCopier);
 
             programClass.fieldsAccept(memberAdder);
             programClass.methodsAccept(memberAdder);
@@ -336,10 +340,8 @@ implements   ClassVisitor,
         // Visit all superclasses and interfaces, collecting the ones that have
         // static initializers.
         clazz.hierarchyAccept(true, true, true, false,
-                              new NamedMethodVisitor(ClassConstants.INTERNAL_METHOD_NAME_CLINIT,
-                                                     ClassConstants.INTERNAL_METHOD_TYPE_INIT,
-                              new MemberToClassVisitor(
-                              new ClassCollector(set))));
+                              new StaticInitializerContainingClassFilter(
+                              new ClassCollector(set)));
 
         return set;
     }
@@ -368,12 +370,19 @@ implements   ClassVisitor,
      */
     private Set caughtSuperClasses(Clazz clazz)
     {
+        // Don't bother if this isn't an exception at all.
+        if (!clazz.extends_(ClassConstants.INTERNAL_NAME_JAVA_LANG_THROWABLE))
+        {
+            return Collections.EMPTY_SET;
+        }
+
+        // Visit all superclasses, collecting the ones that are caught
+        // (plus java.lang.Object, in the current implementation).
         Set set = new HashSet();
 
-        // Visit all superclasses, collecting the ones that are caught.
         clazz.hierarchyAccept(true, true, false, false,
                               new CaughtClassFilter(
-                              new ClassCollector(set)));
+                                  new ClassCollector(set)));
 
         return set;
     }
@@ -536,6 +545,32 @@ implements   ClassVisitor,
             }
 
             targetClass = clazz;
+        }
+    }
+
+
+    /**
+     * This MemberVisitor copies field optimization info from copied fields.
+     */
+    private static class FieldOptimizationInfoCopier
+    extends              SimplifiedVisitor
+    implements           MemberVisitor
+    {
+        public void visitProgramField(ProgramClass programClass, ProgramField programField)
+        {
+            // Copy the optimization info from the field that was just copied.
+            ProgramField copiedField = (ProgramField)programField.getVisitorInfo();
+            Object       info        = copiedField.getVisitorInfo();
+
+            programField.setVisitorInfo(info instanceof FieldOptimizationInfo ?
+                new FieldOptimizationInfo((FieldOptimizationInfo)info) :
+                info);
+        }
+
+
+        public void visitProgramMethod(ProgramClass programClass, ProgramMethod programMethod)
+        {
+            // Linked methods share their optimization info.
         }
     }
 }

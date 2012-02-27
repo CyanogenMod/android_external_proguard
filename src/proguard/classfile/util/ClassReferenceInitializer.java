@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -166,17 +166,30 @@ implements   ClassVisitor,
     }
 
 
+    public void visitMethodHandleConstant(Clazz clazz, MethodHandleConstant methodHandleConstant)
+    {
+        // Fill out the MethodHandle class.
+        methodHandleConstant.javaLangInvokeMethodHandleClass =
+            findClass(clazz.getName(), ClassConstants.INTERNAL_NAME_JAVA_LANG_INVOKE_METHOD_HANDLE);
+    }
+
+
     public void visitAnyRefConstant(Clazz clazz, RefConstant refConstant)
     {
         String className = refConstant.getClassName(clazz);
+
+        // Methods for array types should be found in the Object class.
+        if (ClassUtil.isInternalArrayType(className))
+        {
+            className = ClassConstants.INTERNAL_NAME_JAVA_LANG_OBJECT;
+        }
 
         // See if we can find the referenced class.
         // Unresolved references are assumed to refer to library classes
         // that will not change anyway.
         Clazz referencedClass = findClass(clazz.getName(), className);
 
-        if (referencedClass != null &&
-            !ClassUtil.isInternalArrayType(className))
+        if (referencedClass != null)
         {
             String name = refConstant.getName(clazz);
             String type = refConstant.getType(clazz);
@@ -194,7 +207,7 @@ implements   ClassVisitor,
 
             if (refConstant.referencedMember == null)
             {
-                // We've haven't found the class member anywhere in the hierarchy.
+                // We haven't found the class member anywhere in the hierarchy.
                 missingMemberWarningPrinter.print(clazz.getName(),
                                                   className,
                                                   "Warning: " +
@@ -216,11 +229,19 @@ implements   ClassVisitor,
 
         // Fill out the referenced class.
         classConstant.referencedClass =
-            findClass(className, classConstant.getName(clazz));
+            findClass(className, ClassUtil.internalClassNameFromClassType(classConstant.getName(clazz)));
 
         // Fill out the Class class.
         classConstant.javaLangClassClass =
             findClass(className, ClassConstants.INTERNAL_NAME_JAVA_LANG_CLASS);
+    }
+
+
+    public void visitMethodTypeConstant(Clazz clazz, MethodTypeConstant methodTypeConstant)
+    {
+        // Fill out the MethodType class.
+        methodTypeConstant.javaLangInvokeMethodTypeClass =
+            findClass(clazz.getName(), ClassConstants.INTERNAL_NAME_JAVA_LANG_INVOKE_METHOD_TYPE);
     }
 
 
@@ -235,49 +256,36 @@ implements   ClassVisitor,
         String enclosingClassName = enclosingMethodAttribute.getClassName(clazz);
 
         // See if we can find the referenced class.
-        Clazz referencedClass = findClass(className, enclosingClassName);
+        enclosingMethodAttribute.referencedClass =
+            findClass(className, enclosingClassName);
 
-        if (referencedClass == null)
+        if (enclosingMethodAttribute.referencedClass != null)
         {
-            // We couldn't find the enclosing class.
-            missingClassWarningPrinter.print(className,
-                                             enclosingClassName,
-                                             "Warning: " +
-                                             ClassUtil.externalClassName(className) +
-                                             ": can't find enclosing class " +
-                                             ClassUtil.externalClassName(enclosingClassName));
-            return;
+            // Is there an enclosing method? Otherwise it's just initialization
+            // code outside of the constructors.
+            if (enclosingMethodAttribute.u2nameAndTypeIndex != 0)
+            {
+                String name = enclosingMethodAttribute.getName(clazz);
+                String type = enclosingMethodAttribute.getType(clazz);
+
+                // See if we can find the method in the referenced class.
+                enclosingMethodAttribute.referencedMethod =
+                    enclosingMethodAttribute.referencedClass.findMethod(name, type);
+
+                if (enclosingMethodAttribute.referencedMethod == null)
+                {
+                    // We couldn't find the enclosing method.
+                    missingMemberWarningPrinter.print(className,
+                                                      enclosingClassName,
+                                                      "Warning: " +
+                                                      ClassUtil.externalClassName(className) +
+                                                      ": can't find enclosing method '" +
+                                                      ClassUtil.externalFullMethodDescription(enclosingClassName, 0, name, type) +
+                                                      "' in class " +
+                                                      ClassUtil.externalClassName(enclosingClassName));
+                }
+            }
         }
-
-        // Make sure there is actually an enclosed method.
-        if (enclosingMethodAttribute.u2nameAndTypeIndex == 0)
-        {
-            return;
-        }
-
-        String name = enclosingMethodAttribute.getName(clazz);
-        String type = enclosingMethodAttribute.getType(clazz);
-
-        // See if we can find the method in the referenced class.
-        Method referencedMethod = referencedClass.findMethod(name, type);
-
-        if (referencedMethod == null)
-        {
-            // We couldn't find the enclosing method.
-            missingMemberWarningPrinter.print(className,
-                                              enclosingClassName,
-                                              "Warning: " +
-                                              ClassUtil.externalClassName(className) +
-                                              ": can't find enclosing method '" +
-                                              ClassUtil.externalFullMethodDescription(enclosingClassName, 0, name, type) +
-                                              "' in class " +
-                                              ClassUtil.externalClassName(enclosingClassName));
-            return;
-        }
-
-        // Save the references.
-        enclosingMethodAttribute.referencedClass  = referencedClass;
-        enclosingMethodAttribute.referencedMethod = referencedMethod;
     }
 
 
@@ -501,11 +509,17 @@ implements   ClassVisitor,
      */
     private Clazz findClass(String referencingClassName, String name)
     {
-        // Ignore any primitive array types.
-        if (ClassUtil.isInternalArrayType(name) &&
-            !ClassUtil.isInternalClassType(name))
+        // Is it an array type?
+        if (ClassUtil.isInternalArrayType(name))
         {
-            return null;
+            // Ignore any primitive array types.
+            if (!ClassUtil.isInternalClassType(name))
+            {
+                return null;
+            }
+
+            // Strip the array part.
+            name = ClassUtil.internalClassNameFromClassType(name);
         }
 
         // First look for the class in the program class pool.

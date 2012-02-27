@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -34,6 +34,8 @@ import proguard.evaluation.*;
 import proguard.evaluation.value.*;
 import proguard.optimize.info.*;
 
+import java.util.Arrays;
+
 /**
  * This AttributeVisitor simplifies the code attributes that it visits, based
  * on partial evaluation.
@@ -55,13 +57,14 @@ implements   AttributeVisitor
     private final InstructionVisitor extraDeletedInstructionVisitor;
     private final InstructionVisitor extraAddedInstructionVisitor;
 
-    private final PartialEvaluator             partialEvaluator;
-    private final PartialEvaluator             simplePartialEvaluator       = new PartialEvaluator();
-    private final SideEffectInstructionChecker sideEffectInstructionChecker = new SideEffectInstructionChecker(true);
-    private final MyUnusedParameterSimplifier  unusedParameterSimplifier    = new MyUnusedParameterSimplifier();
-    private final MyProducerMarker             producerMarker               = new MyProducerMarker();
-    private final MyStackConsistencyFixer      stackConsistencyFixer        = new MyStackConsistencyFixer();
-    private final CodeAttributeEditor          codeAttributeEditor          = new CodeAttributeEditor(false);
+    private final PartialEvaluator               partialEvaluator;
+    private final PartialEvaluator               simplePartialEvaluator       = new PartialEvaluator();
+    private final SideEffectInstructionChecker   sideEffectInstructionChecker = new SideEffectInstructionChecker(true);
+    private final MyUnusedParameterSimplifier    unusedParameterSimplifier    = new MyUnusedParameterSimplifier();
+    private final MyProducerMarker               producerMarker               = new MyProducerMarker();
+    private final MyVariableInitializationMarker variableInitializationMarker = new MyVariableInitializationMarker();
+    private final MyStackConsistencyFixer        stackConsistencyFixer        = new MyStackConsistencyFixer();
+    private final CodeAttributeEditor            codeAttributeEditor          = new CodeAttributeEditor(false);
 
     private boolean[][] variablesNecessaryAfter = new boolean[ClassConstants.TYPICAL_CODE_LENGTH][ClassConstants.TYPICAL_VARIABLES_SIZE];
     private boolean[][] stacksNecessaryAfter    = new boolean[ClassConstants.TYPICAL_CODE_LENGTH][ClassConstants.TYPICAL_STACK_SIZE];
@@ -276,18 +279,10 @@ implements   AttributeVisitor
             if (partialEvaluator.isTraced(offset) &&
                 !isInstructionNecessary(offset))
             {
-                // Is the corresponding variable necessary anywhere in the code,
-                // accoriding to a simple partial evaluation?
-                int variableIndex = partialEvaluator.initializedVariable(offset);
-                if (variableIndex >= 0 &&
-                    isVariableInitializationNecessary(clazz,
-                                                      method,
-                                                      codeAttribute,
-                                                      offset,
-                                                      variableIndex))
-                {
-                    markInstruction(offset);
-                }
+                Instruction instruction = InstructionFactory.create(codeAttribute.code,
+                                                                    offset);
+
+                instruction.accept(clazz, method, codeAttribute, offset, variableInitializationMarker);
             }
         }
         if (DEBUG) System.out.println();
@@ -467,7 +462,9 @@ implements   AttributeVisitor
      */
     private class MyUnusedParameterSimplifier
     extends       SimplifiedVisitor
-    implements    InstructionVisitor, ConstantVisitor, MemberVisitor
+    implements    InstructionVisitor,
+                  ConstantVisitor,
+                  MemberVisitor
     {
         private int                 invocationOffset;
         private ConstantInstruction invocationInstruction;
@@ -657,6 +654,40 @@ implements   AttributeVisitor
 
 
     /**
+     * This InstructionVisitor marks variable initializations that are
+     * necessary to appease the JVM.
+     */
+    private class MyVariableInitializationMarker
+    extends       SimplifiedVisitor
+    implements    InstructionVisitor
+    {
+        // Implementations for InstructionVisitor.
+
+        public void visitAnyInstruction(Clazz clazz, Method method, CodeAttribute codeAttribute, int offset, Instruction instruction) {}
+
+
+        public void visitVariableInstruction(Clazz clazz, Method method, CodeAttribute codeAttribute, int offset, VariableInstruction variableInstruction)
+        {
+            if (!variableInstruction.isLoad())
+            {
+                int variableIndex = variableInstruction.variableIndex;
+
+                if (isVariableInitialization(offset,
+                                             variableIndex) &&
+                    isVariableInitializationNecessary(clazz,
+                                                      method,
+                                                      codeAttribute,
+                                                      offset,
+                                                      variableIndex))
+                {
+                    markInstruction(offset);
+                }
+            }
+        }
+    }
+
+
+    /**
      * This InstructionVisitor fixes instructions locally, popping any unused
      * produced stack entries after marked instructions, and popping produced
      * stack entries and pushing missing stack entries instead of unmarked
@@ -687,12 +718,23 @@ implements   AttributeVisitor
                     int requiredPushCount = 0;
                     for (int stackIndex = 0; stackIndex < popCount; stackIndex++)
                     {
-                        // Is the stack entry required by other consumers?
-                        if (!isStackSimplifiedBefore(offset, top - stackIndex) &&
-                            !isAnyStackEntryNecessaryAfter(tracedStack.getTopProducerValue(stackIndex).instructionOffsetValue(), top - stackIndex))
+                        InstructionOffsetValue producerOffsets =
+                            tracedStack.getTopProducerValue(stackIndex).instructionOffsetValue();
+
+                        if (!isStackSimplifiedBefore(offset, top - stackIndex))
                         {
-                            // Remember to push it.
-                            requiredPushCount++;
+                            // Is the stack entry pushed by any producer,
+                            // because it is required by other consumers?
+                            if (isAnyStackEntryNecessaryAfter(producerOffsets, top - stackIndex))
+                            {
+                                // Make sure it is pushed after all producers.
+                                markStackEntriesAfter(producerOffsets, top - stackIndex);
+                            }
+                            else
+                            {
+                                // Remember to push it.
+                                requiredPushCount++;
+                            }
                         }
                     }
 
@@ -757,9 +799,16 @@ implements   AttributeVisitor
                     int expectedPopCount = 0;
                     for (int stackIndex = 0; stackIndex < popCount; stackIndex++)
                     {
-                        // Is the stack entry required by other consumers?
-                        if (isAnyStackEntryNecessaryAfter(tracedStack.getTopProducerValue(stackIndex).instructionOffsetValue(), top - stackIndex))
+                        InstructionOffsetValue producerOffsets =
+                            tracedStack.getTopProducerValue(stackIndex).instructionOffsetValue();
+
+                        // Is the stack entry pushed by any producer,
+                        // because it is required by other consumers?
+                        if (isAnyStackEntryNecessaryAfter(producerOffsets, top - stackIndex))
                         {
+                            // Make sure it is pushed after all producers.
+                            markStackEntriesAfter(producerOffsets, top - stackIndex);
+
                             // Remember to pop it.
                             expectedPopCount++;
                         }
@@ -1052,6 +1101,7 @@ implements   AttributeVisitor
 
         byte oldOpcode = instruction.opcode;
         byte newOpcode = 0;
+        byte addOpcode = 0;
 
         // Simplify the popping instruction if possible.
         switch (oldOpcode)
@@ -1232,9 +1282,20 @@ implements   AttributeVisitor
                     stackEntryPresent1)
                 {
                     // Will both elements be present?
-                    if (stackEntryPresent0 &&
-                        stackEntryPresent1)
+                    if (!stackEntryPresent1)
                     {
+                        // Pop the original top element (later bottom element).
+                        newOpcode = InstructionConstants.OP_POP;
+                    }
+                    else if (!stackEntryPresent0)
+                    {
+                        // Swap both elements and pop the top one.
+                        newOpcode = InstructionConstants.OP_SWAP;
+                        addOpcode = InstructionConstants.OP_POP;
+                    }
+                    else
+                    {
+                        // Just swap both elements.
                         newOpcode = InstructionConstants.OP_SWAP;
                     }
                 }
@@ -1242,6 +1303,7 @@ implements   AttributeVisitor
             }
         }
 
+        // Is there a replacement opcode?
         if      (newOpcode == 0)
         {
             // Delete the instruction.
@@ -1269,6 +1331,21 @@ implements   AttributeVisitor
                                                    replacementInstruction);
 
             if (DEBUG) System.out.println("  Replacing instruction "+instruction.toString(dupOffset)+" by "+replacementInstruction.toString());
+        }
+
+        // Is there an additional opcode?
+        if (addOpcode != 0)
+        {
+            // Add the instruction.
+            Instruction additionalInstruction = new SimpleInstruction(addOpcode);
+            codeAttributeEditor.insertAfterInstruction(dupOffset, additionalInstruction);
+
+            if (extraAddedInstructionVisitor != null)
+            {
+                extraAddedInstructionVisitor.visitSimpleInstruction(null, null, null, dupOffset, null);
+            }
+
+            if (DEBUG) System.out.println("  Adding instruction "+additionalInstruction.toString(dupOffset));
         }
     }
 
@@ -1596,10 +1673,7 @@ implements   AttributeVisitor
         {
             for (int offset = 0; offset < codeLength; offset++)
             {
-                for (int index = 0; index < maxLocals; index++)
-                {
-                    variablesNecessaryAfter[offset][index] = false;
-                }
+                Arrays.fill(variablesNecessaryAfter[offset], 0, maxLocals, false);
             }
         }
 
@@ -1612,10 +1686,7 @@ implements   AttributeVisitor
         {
             for (int offset = 0; offset < codeLength; offset++)
             {
-                for (int index = 0; index < maxStack; index++)
-                {
-                    stacksNecessaryAfter[offset][index] = false;
-                }
+                Arrays.fill(stacksNecessaryAfter[offset], 0, maxStack, false);
             }
         }
 
@@ -1628,10 +1699,7 @@ implements   AttributeVisitor
         {
             for (int offset = 0; offset < codeLength; offset++)
             {
-                for (int index = 0; index < maxStack; index++)
-                {
-                    stacksSimplifiedBefore[offset][index] = false;
-                }
+                Arrays.fill(stacksSimplifiedBefore[offset], 0, maxStack, false);
             }
         }
 
@@ -1641,10 +1709,7 @@ implements   AttributeVisitor
         }
         else
         {
-            for (int index = 0; index < codeLength; index++)
-            {
-                instructionsNecessary[index] = false;
-            }
+            Arrays.fill(instructionsNecessary, 0, codeLength, false);
         }
     }
 
@@ -1670,6 +1735,34 @@ implements   AttributeVisitor
 
 
     /**
+     * Returns whether the specified variable is initialized at the specified
+     * offset.
+     */
+    private boolean isVariableInitialization(int instructionOffset,
+                                             int variableIndex)
+    {
+        // Wasn't the variable set yet?
+        Value valueBefore = partialEvaluator.getVariablesBefore(instructionOffset).getValue(variableIndex);
+        if (valueBefore == null)
+        {
+            return true;
+        }
+
+        // Is the computational type different now?
+        Value valueAfter = partialEvaluator.getVariablesAfter(instructionOffset).getValue(variableIndex);
+        if (valueAfter.computationalType() != valueBefore.computationalType())
+        {
+            return true;
+        }
+
+        // Was the producer an argument (which may be removed)?
+        Value producersBefore = partialEvaluator.getVariablesBefore(instructionOffset).getProducerValue(variableIndex);
+        return producersBefore.instructionOffsetValue().instructionOffsetCount() == 1 &&
+               producersBefore.instructionOffsetValue().instructionOffset(0) == PartialEvaluator.AT_METHOD_ENTRY;
+    }
+
+
+    /**
      * Returns whether the specified variable must be initialized at the
      * specified offset, according to the verifier of the JVM.
      */
@@ -1686,8 +1779,8 @@ implements   AttributeVisitor
         {
             if (DEBUG) System.out.println("Simple partial evaluation for initialization of variable v"+variableIndex+" at ["+initializationOffset+"]");
 
-            // Lazily compute perform simple partial evaluation, the way the
-            // JVM preverifier would do it.
+            // Lazily perform simple partial evaluation, the way the JVM
+            // verifier would do it.
             simplePartialEvaluator.visitCodeAttribute(clazz, method, codeAttribute);
 
             if (DEBUG) System.out.println("End of simple partial evaluation for initialization of variable v"+variableIndex+" at ["+initializationOffset+"]");
@@ -1695,7 +1788,7 @@ implements   AttributeVisitor
             // Check if the variable is necessary elsewhere.
             for (int offset = 0; offset < codeLength; offset++)
             {
-                if (isInstructionNecessary(offset))
+                if (partialEvaluator.isTraced(offset))
                 {
                     Value producer = partialEvaluator.getVariablesBefore(offset).getProducerValue(variableIndex);
                     if (producer != null)
@@ -1708,22 +1801,33 @@ implements   AttributeVisitor
                             InstructionOffsetValue simpleProducerOffsets =
                                 simpleProducer.instructionOffsetValue();
 
-                            // Does the sophisticated partial evaluation have fewer
-                            // producers than the simple one?
-                            // And does the simple partial evaluation point to an
-                            // initialization of the variable?
-                            if (producerOffsets.instructionOffsetCount() <
-                                simpleProducerOffsets.instructionOffsetCount() &&
-                                isVariableNecessaryAfterAny(producerOffsets, variableIndex) &&
-                                simpleProducerOffsets.contains(initializationOffset))
+                            if (DEBUG)
                             {
-                                // Then the initialization is necessary.
+                                System.out.println("  ["+offset+"] producers ["+producerOffsets+"], simple producers ["+simpleProducerOffsets+"]");
+                            }
+
+                            // Is the variable being used without all of its
+                            // immediate simple producers being marked?
+                            if (isVariableNecessaryAfterAny(producerOffsets, variableIndex) &&
+                                !isVariableNecessaryAfterAll(simpleProducerOffsets, variableIndex))
+                            {
+                                if (DEBUG)
+                                {
+                                    System.out.println("    => initialization of variable v"+variableIndex+" at ["+initializationOffset+"] necessary");
+                                }
+
+                                // Then the initialization may be necessary.
                                 return true;
                             }
                         }
                     }
                 }
             }
+        }
+
+        if (DEBUG)
+        {
+            System.out.println("    => initialization of variable v"+variableIndex+" at ["+initializationOffset+"] not necessary");
         }
 
         return false;
@@ -1749,7 +1853,7 @@ implements   AttributeVisitor
 
     /**
      * Returns whether the specified variable is ever necessary after any
-     * instruction in the specified block.
+     * instructions in the specified block.
      */
     private boolean isVariableNecessaryAfterAny(int startOffset,
                                                 int endOffset,
@@ -1769,7 +1873,7 @@ implements   AttributeVisitor
 
     /**
      * Returns whether the specified variable is ever necessary after any
-     * instruction in the specified set of instructions offsets.
+     * instructions in the specified set of instructions offsets.
      */
     private boolean isVariableNecessaryAfterAny(InstructionOffsetValue instructionOffsetValue,
                                                 int                    variableIndex)
@@ -1789,6 +1893,28 @@ implements   AttributeVisitor
     }
 
 
+    /**
+     * Returns whether the specified variable is ever necessary after all
+     * instructions in the specified set of instructions offsets.
+     */
+    private boolean isVariableNecessaryAfterAll(InstructionOffsetValue instructionOffsetValue,
+                                                int                    variableIndex)
+    {
+        int count = instructionOffsetValue.instructionOffsetCount();
+
+        for (int index = 0; index < count; index++)
+        {
+            if (!isVariableNecessaryAfter(instructionOffsetValue.instructionOffset(index),
+                                          variableIndex))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
     private boolean isVariableNecessaryAfter(int instructionOffset,
                                              int variableIndex)
     {
@@ -1797,6 +1923,36 @@ implements   AttributeVisitor
     }
 
 
+    /**
+     * Marks the stack entries after the given offsets.
+     * @param instructionOffsets the offsets of the stack entries to be marked.
+     * @param stackIndex         the index of the stack entries to be marked
+     *                           (counting from the bottom).
+     */
+    private void markStackEntriesAfter(InstructionOffsetValue instructionOffsets,
+                                       int                    stackIndex)
+    {
+        if (instructionOffsets != null)
+        {
+            int offsetCount = instructionOffsets.instructionOffsetCount();
+            for (int offsetIndex = 0; offsetIndex < offsetCount; offsetIndex++)
+            {
+                // Make sure the stack entry and the instruction are marked
+                // at the producing offset.
+                int offset = instructionOffsets.instructionOffset(offsetIndex);
+
+                markStackEntryAfter(offset, stackIndex);
+            }
+        }
+    }
+
+
+    /**
+     * Marks the stack entry after the given offset.
+     * @param instructionOffset the offset of the stack entry to be marked.
+     * @param stackIndex        the index of the stack entry to be marked
+     *                          (counting from the bottom).
+     */
     private void markStackEntryAfter(int instructionOffset,
                                      int stackIndex)
     {
@@ -1814,6 +1970,13 @@ implements   AttributeVisitor
     }
 
 
+    /**
+     * Returns whether any of the stack entries after the given offsets are
+     * necessary.
+     * @param instructionOffsets the offsets of the stack entries to be checked.
+     * @param stackIndex         the index of the stack entries to be checked
+     *                           (counting from the bottom).
+     */
     private boolean isAnyStackEntryNecessaryAfter(InstructionOffsetValue instructionOffsets,
                                                   int                    stackIndex)
     {
@@ -1831,6 +1994,13 @@ implements   AttributeVisitor
     }
 
 
+    /**
+     * Returns whether any of the stack entries after the given offset are
+     * necessary.
+     * @param instructionOffset the offset of the stack entry to be checked.
+     * @param stackIndex        the index of the stack entry to be checked
+     *                          (counting from the bottom).
+     */
     private boolean isStackEntryNecessaryAfter(int instructionOffset,
                                                int stackIndex)
     {

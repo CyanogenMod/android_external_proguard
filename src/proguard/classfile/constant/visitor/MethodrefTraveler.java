@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -18,38 +18,32 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
-package proguard.classfile.visitor;
+package proguard.classfile.constant.visitor;
 
 import proguard.classfile.Clazz;
+import proguard.classfile.attribute.*;
 import proguard.classfile.constant.*;
-import proguard.classfile.constant.visitor.ConstantVisitor;
 import proguard.classfile.util.SimplifiedVisitor;
 
-
 /**
- * This ConstantVisitor lets a given <code>ClassVisitor</code> visit all
- * constant classes involved in any <code>Class.forName</code> constructs that
- * it visits.
- *
- * @see DotClassClassVisitor
+ * This ConstantVisitor travels from any method handle constants that it visits
+ * to their methodref constants, and applies a given constant visitor.
  *
  * @author Eric Lafortune
  */
-public class ClassForNameClassVisitor
+public class MethodrefTraveler
 extends      SimplifiedVisitor
 implements   ConstantVisitor
 {
-    private final ClassVisitor classVisitor;
+    private ConstantVisitor methodrefConstantVisitor;
 
 
     /**
-     * Creates a new ClassHierarchyTraveler.
-     * @param classVisitor the <code>ClassVisitor</code> to which visits will
-     *                     be delegated.
+     * Creates a new v that will delegate to the given constant visitor.
      */
-    public ClassForNameClassVisitor(ClassVisitor classVisitor)
+    public MethodrefTraveler(ConstantVisitor methodrefConstantVisitor)
     {
-        this.classVisitor = classVisitor;
+        this.methodrefConstantVisitor = methodrefConstantVisitor;
     }
 
 
@@ -58,9 +52,9 @@ implements   ConstantVisitor
     public void visitAnyConstant(Clazz clazz, Constant constant) {}
 
 
-    public void visitStringConstant(Clazz clazz, StringConstant stringConstant)
+    public void visitMethodHandleConstant(Clazz clazz, MethodHandleConstant methodHandleConstant)
     {
-        // Visit the referenced class from the Class.forName construct, if any.
-        stringConstant.referencedClassAccept(classVisitor);
+        clazz.constantPoolEntryAccept(methodHandleConstant.u2referenceIndex,
+                                      methodrefConstantVisitor);
     }
 }

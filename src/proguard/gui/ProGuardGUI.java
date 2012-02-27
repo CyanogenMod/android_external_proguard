@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -33,7 +33,6 @@ import java.io.*;
 import java.net.URL;
 import java.util.*;
 import java.util.List;
-import java.lang.reflect.InvocationTargetException;
 
 
 /**
@@ -110,6 +109,7 @@ public class ProGuardGUI extends JFrame
     private final JCheckBox flattenPackageHierarchyCheckBox      = new JCheckBox(msg("flattenPackageHierarchy"));
     private final JCheckBox repackageClassesCheckBox             = new JCheckBox(msg("repackageClasses"));
     private final JCheckBox keepAttributesCheckBox               = new JCheckBox(msg("keepAttributes"));
+    private final JCheckBox keepParameterNamesCheckBox           = new JCheckBox(msg("keepParameterNames"));
     private final JCheckBox newSourceFileAttributeCheckBox       = new JCheckBox(msg("renameSourceFileAttribute"));
     private final JCheckBox adaptClassStringsCheckBox            = new JCheckBox(msg("adaptClassStrings"));
     private final JCheckBox adaptResourceFileNamesCheckBox       = new JCheckBox(msg("adaptResourceFileNames"));
@@ -202,13 +202,13 @@ public class ProGuardGUI extends JFrame
         splashPanelConstraints.anchor    = GridBagConstraints.NORTHWEST;
         //splashPanelConstraints.insets    = constraints.insets;
 
-        GridBagConstraints welcomeTextAreaConstraints = new GridBagConstraints();
-        welcomeTextAreaConstraints.gridwidth = GridBagConstraints.REMAINDER;
-        welcomeTextAreaConstraints.fill      = GridBagConstraints.NONE;
-        welcomeTextAreaConstraints.weightx   = 1.0;
-        welcomeTextAreaConstraints.weighty   = 0.01;
-        welcomeTextAreaConstraints.anchor    = GridBagConstraints.CENTER;//NORTHWEST;
-        welcomeTextAreaConstraints.insets    = new Insets(20, 40, 20, 40);
+        GridBagConstraints welcomePaneConstraints = new GridBagConstraints();
+        welcomePaneConstraints.gridwidth = GridBagConstraints.REMAINDER;
+        welcomePaneConstraints.fill      = GridBagConstraints.NONE;
+        welcomePaneConstraints.weightx   = 1.0;
+        welcomePaneConstraints.weighty   = 0.01;
+        welcomePaneConstraints.anchor    = GridBagConstraints.CENTER;//NORTHWEST;
+        welcomePaneConstraints.insets    = new Insets(20, 40, 20, 40);
 
         GridBagConstraints panelConstraints = new GridBagConstraints();
         panelConstraints.gridwidth = GridBagConstraints.REMAINDER;
@@ -295,18 +295,19 @@ public class ProGuardGUI extends JFrame
         splashPanel = new SplashPanel(splash, 0.5, 5500L);
         splashPanel.setPreferredSize(new Dimension(0, 200));
 
-        JTextArea welcomeTextArea = new JTextArea(msg("proGuardInfo"), 18, 50);
-        welcomeTextArea.setOpaque(false);
-        welcomeTextArea.setEditable(false);
-        welcomeTextArea.setLineWrap(true);
-        welcomeTextArea.setWrapStyleWord(true);
-        welcomeTextArea.setPreferredSize(new Dimension(0, 0));
-        welcomeTextArea.setBorder(new EmptyBorder(20, 20, 20, 20));
-        addBorder(welcomeTextArea, "welcome");
+        JEditorPane welcomePane = new JEditorPane("text/html", msg("proGuardInfo"));
+        welcomePane.setPreferredSize(new Dimension(640, 350));
+        // The constant HONOR_DISPLAY_PROPERTIES isn't present yet in JDK 1.4.
+        //welcomePane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        welcomePane.putClientProperty("JEditorPane.honorDisplayProperties", Boolean.TRUE);
+        welcomePane.setOpaque(false);
+        welcomePane.setEditable(false);
+        welcomePane.setBorder(new EmptyBorder(20, 20, 20, 20));
+        addBorder(welcomePane, "welcome");
 
         JPanel proGuardPanel = new JPanel(layout);
         proGuardPanel.add(splashPanel,      splashPanelConstraints);
-        proGuardPanel.add(welcomeTextArea,  welcomeTextAreaConstraints);
+        proGuardPanel.add(welcomePane,  welcomePaneConstraints);
 
         // Create the input panel.
         // TODO: properly clone the ClassPath objects.
@@ -403,6 +404,7 @@ public class ProGuardGUI extends JFrame
         obfuscationOptionsPanel.add(tip(repackageClassesTextField,               "packageTip"),                      constraintsLastStretch);
         obfuscationOptionsPanel.add(tip(keepAttributesCheckBox,                  "keepAttributesTip"),               constraints);
         obfuscationOptionsPanel.add(tip(keepAttributesTextField,                 "attributesTip"),                   constraintsLastStretch);
+        obfuscationOptionsPanel.add(tip(keepParameterNamesCheckBox,              "keepParameterNamesTip"),           constraintsLastStretch);
         obfuscationOptionsPanel.add(tip(newSourceFileAttributeCheckBox,          "renameSourceFileAttributeTip"),    constraints);
         obfuscationOptionsPanel.add(tip(newSourceFileAttributeTextField,         "sourceFileAttributeTip"),          constraintsLastStretch);
         obfuscationOptionsPanel.add(tip(adaptClassStringsCheckBox,               "adaptClassStringsTip"),            constraints);
@@ -1019,6 +1021,7 @@ public class ProGuardGUI extends JFrame
         flattenPackageHierarchyCheckBox         .setSelected(configuration.flattenPackageHierarchy      != null);
         repackageClassesCheckBox                .setSelected(configuration.repackageClasses             != null);
         keepAttributesCheckBox                  .setSelected(configuration.keepAttributes               != null);
+        keepParameterNamesCheckBox              .setSelected(configuration.keepParameterNames);
         newSourceFileAttributeCheckBox          .setSelected(configuration.newSourceFileAttribute       != null);
         adaptClassStringsCheckBox               .setSelected(configuration.adaptClassStrings            != null);
         adaptResourceFileNamesCheckBox          .setSelected(configuration.adaptResourceFileNames       != null);
@@ -1041,21 +1044,26 @@ public class ProGuardGUI extends JFrame
         dumpCheckBox                            .setSelected(configuration.dump               != null);
 
         printUsageTextField                     .setText(fileName(configuration.printUsage));
-        optimizationsTextField                  .setText(configuration.optimizations             == null ? OPTIMIZATIONS_DEFAULT                : ListUtil.commaSeparatedString(configuration.optimizations));
+        optimizationsTextField                  .setText(configuration.optimizations ==
+                                                         null ?
+                                                             OPTIMIZATIONS_DEFAULT :
+                                                             ListUtil.commaSeparatedString(configuration.optimizations, true));
         printMappingTextField                   .setText(fileName(configuration.printMapping));
         applyMappingTextField                   .setText(fileName(configuration.applyMapping));
         obfuscationDictionaryTextField          .setText(fileName(configuration.obfuscationDictionary));
-        keepPackageNamesTextField               .setText(configuration.keepPackageNames          == null ? ""                                   : ClassUtil.externalClassName(ListUtil.commaSeparatedString(configuration.keepPackageNames)));
+        classObfuscationDictionaryTextField     .setText(fileName(configuration.classObfuscationDictionary));
+        packageObfuscationDictionaryTextField   .setText(fileName(configuration.packageObfuscationDictionary));
+        keepPackageNamesTextField               .setText(configuration.keepPackageNames          == null ? ""                                   : ClassUtil.externalClassName(ListUtil.commaSeparatedString(configuration.keepPackageNames, true)));
         flattenPackageHierarchyTextField        .setText(configuration.flattenPackageHierarchy);
         repackageClassesTextField               .setText(configuration.repackageClasses);
-        keepAttributesTextField                 .setText(configuration.keepAttributes            == null ? KEEP_ATTRIBUTE_DEFAULT               : ListUtil.commaSeparatedString(configuration.keepAttributes));
+        keepAttributesTextField                 .setText(configuration.keepAttributes            == null ? KEEP_ATTRIBUTE_DEFAULT               : ListUtil.commaSeparatedString(configuration.keepAttributes, true));
         newSourceFileAttributeTextField         .setText(configuration.newSourceFileAttribute    == null ? SOURCE_FILE_ATTRIBUTE_DEFAULT        : configuration.newSourceFileAttribute);
-        adaptClassStringsTextField              .setText(configuration.adaptClassStrings         == null ? ""                                   : ClassUtil.externalClassName(ListUtil.commaSeparatedString(configuration.adaptClassStrings)));
-        adaptResourceFileNamesTextField         .setText(configuration.adaptResourceFileNames    == null ? ADAPT_RESOURCE_FILE_NAMES_DEFAULT    : ListUtil.commaSeparatedString(configuration.adaptResourceFileNames));
-        adaptResourceFileContentsTextField      .setText(configuration.adaptResourceFileContents == null ? ADAPT_RESOURCE_FILE_CONTENTS_DEFAULT : ListUtil.commaSeparatedString(configuration.adaptResourceFileContents));
-        noteTextField                           .setText(ListUtil.commaSeparatedString(configuration.note));
-        warnTextField                           .setText(ListUtil.commaSeparatedString(configuration.warn));
-        keepDirectoriesTextField                .setText(ListUtil.commaSeparatedString(configuration.keepDirectories));
+        adaptClassStringsTextField              .setText(configuration.adaptClassStrings         == null ? ""                                   : ClassUtil.externalClassName(ListUtil.commaSeparatedString(configuration.adaptClassStrings, true)));
+        adaptResourceFileNamesTextField         .setText(configuration.adaptResourceFileNames    == null ? ADAPT_RESOURCE_FILE_NAMES_DEFAULT    : ListUtil.commaSeparatedString(configuration.adaptResourceFileNames, true));
+        adaptResourceFileContentsTextField      .setText(configuration.adaptResourceFileContents == null ? ADAPT_RESOURCE_FILE_CONTENTS_DEFAULT : ListUtil.commaSeparatedString(configuration.adaptResourceFileContents, true));
+        noteTextField                           .setText(ListUtil.commaSeparatedString(configuration.note, true));
+        warnTextField                           .setText(ListUtil.commaSeparatedString(configuration.warn, true));
+        keepDirectoriesTextField                .setText(ListUtil.commaSeparatedString(configuration.keepDirectories, true));
         printSeedsTextField                     .setText(fileName(configuration.printSeeds));
         printConfigurationTextField             .setText(fileName(configuration.printConfiguration));
         dumpTextField                           .setText(fileName(configuration.dump));
@@ -1182,6 +1190,7 @@ public class ProGuardGUI extends JFrame
         configuration.flattenPackageHierarchy          = flattenPackageHierarchyCheckBox         .isSelected() ? ClassUtil.internalClassName(flattenPackageHierarchyTextField         .getText()) : null;
         configuration.repackageClasses                 = repackageClassesCheckBox                .isSelected() ? ClassUtil.internalClassName(repackageClassesTextField                .getText()) : null;
         configuration.keepAttributes                   = keepAttributesCheckBox                  .isSelected() ? ListUtil.commaSeparatedList(keepAttributesTextField                  .getText()) : null;
+        configuration.keepParameterNames               = keepParameterNamesCheckBox              .isSelected();
         configuration.newSourceFileAttribute           = newSourceFileAttributeCheckBox          .isSelected() ? newSourceFileAttributeTextField                                      .getText()  : null;
         configuration.adaptClassStrings                = adaptClassStringsCheckBox               .isSelected() ? adaptClassStringsTextField.getText().length() > 0 ? ListUtil.commaSeparatedList(ClassUtil.internalClassName(adaptClassStringsTextField.getText())) : new ArrayList() : null;
         configuration.adaptResourceFileNames           = adaptResourceFileNamesCheckBox          .isSelected() ? ListUtil.commaSeparatedList(adaptResourceFileNamesTextField          .getText()) : null;
@@ -1436,13 +1445,13 @@ public class ProGuardGUI extends JFrame
     /**
      * Loads the given stack trace into the GUI.
      */
-    private void loadStackTrace(String fileName)
+    private void loadStackTrace(File file)
     {
         try
         {
             StringBuffer buffer = new StringBuffer(1024);
 
-            Reader reader = new BufferedReader(new FileReader(fileName));
+            Reader reader = new BufferedReader(new FileReader(file));
             try
             {
                 while (true)
@@ -1467,7 +1476,7 @@ public class ProGuardGUI extends JFrame
         catch (IOException ex)
         {
             JOptionPane.showMessageDialog(getContentPane(),
-                                          msg("cantOpenStackTraceFile", fileName),
+                                          msg("cantOpenStackTraceFile", fileName(file)),
                                           msg("warning"),
                                           JOptionPane.ERROR_MESSAGE);
         }
@@ -1600,10 +1609,8 @@ public class ProGuardGUI extends JFrame
             int returnValue = fileChooser.showOpenDialog(ProGuardGUI.this);
             if (returnValue == JFileChooser.APPROVE_OPTION)
             {
-                File selectedFile = fileChooser.getSelectedFile();
-                String fileName = selectedFile.getPath();
 
-                loadStackTrace(fileName);
+                loadStackTrace(fileChooser.getSelectedFile());
             }
         }
     }
@@ -1641,11 +1648,37 @@ public class ProGuardGUI extends JFrame
     // Small utility methods.
 
     /**
-     * Returns the file name of the given file, if any.
+     * Returns the canonical file name for the given file, or the empty string
+     * if the file name is empty.
      */
-    private static String fileName(File file)
+    private String fileName(File file)
     {
-        return file == null ? "" : file.getAbsolutePath();
+        if (isFile(file))
+        {
+            try
+            {
+                return file.getCanonicalPath();
+            }
+            catch (IOException ex)
+            {
+                return file.getPath();
+            }
+        }
+        else
+        {
+            return "";
+        }
+    }
+
+
+    /**
+     * Returns whether the given file is actually a file, or just a placeholder
+     * for the standard output.
+     */
+    private boolean isFile(File file)
+    {
+        return file != null &&
+               file.getPath().length() > 0;
     }
 
 
@@ -1693,46 +1726,52 @@ public class ProGuardGUI extends JFrame
             {
                 public void run()
                 {
-                    ProGuardGUI gui = new ProGuardGUI();
-                    gui.pack();
-
-                    Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-                    Dimension guiSize    = gui.getSize();
-                    gui.setLocation((screenSize.width - guiSize.width)   / 2,
-                                    (screenSize.height - guiSize.height) / 2);
-                    gui.show();
-
-                    // Start the splash animation, unless specified otherwise.
-                    int argIndex = 0;
-                    if (argIndex < args.length &&
-                        NO_SPLASH_OPTION.startsWith(args[argIndex]))
+                    try
                     {
-                        gui.skipSplash();
-                        argIndex++;
-                    }
-                    else
-                    {
-                        gui.startSplash();
-                    }
+                        ProGuardGUI gui = new ProGuardGUI();
+                        gui.pack();
 
-                    // Load an initial configuration, if specified.
-                    if (argIndex < args.length)
-                    {
-                        gui.loadConfiguration(new File(args[argIndex]));
-                        argIndex++;
-                    }
+                        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+                        Dimension guiSize    = gui.getSize();
+                        gui.setLocation((screenSize.width - guiSize.width)   / 2,
+                                        (screenSize.height - guiSize.height) / 2);
+                        gui.show();
 
-                    if (argIndex < args.length)
-                    {
-                        System.out.println(gui.getClass().getName() + ": ignoring extra arguments [" + args[argIndex] + "...]");
-                    }
+                        // Start the splash animation, unless specified otherwise.
+                        int argIndex = 0;
+                        if (argIndex < args.length &&
+                            NO_SPLASH_OPTION.startsWith(args[argIndex]))
+                        {
+                            gui.skipSplash();
+                            argIndex++;
+                        }
+                        else
+                        {
+                            gui.startSplash();
+                        }
 
+                        // Load an initial configuration, if specified.
+                        if (argIndex < args.length)
+                        {
+                            gui.loadConfiguration(new File(args[argIndex]));
+                            argIndex++;
+                        }
+
+                        if (argIndex < args.length)
+                        {
+                            System.out.println(gui.getClass().getName() + ": ignoring extra arguments [" + args[argIndex] + "...]");
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        System.out.println("Internal problem starting the ProGuard GUI (" + e.getMessage() + ")");
+                    }
                 }
             });
         }
         catch (Exception e)
         {
-            // Nothing.
+            System.out.println("Internal problem starting the ProGuard GUI (" + e.getMessage() + ")");
         }
     }
 }
