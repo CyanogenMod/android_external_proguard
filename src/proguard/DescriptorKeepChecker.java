@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -23,7 +23,7 @@ package proguard;
 import proguard.classfile.*;
 import proguard.classfile.util.*;
 import proguard.classfile.visitor.*;
-import proguard.optimize.*;
+import proguard.optimize.KeepMarker;
 
 import java.util.List;
 
@@ -64,7 +64,7 @@ implements   MemberVisitor,
 
     /**
      * Checks the classes mentioned in the given keep specifications, printing
-     * notes if necessary.
+     * notes if necessary. Returns the number of notes printed.
      */
     public void checkClassSpecifications(List keepSpecifications)
     {
@@ -85,11 +85,8 @@ implements   MemberVisitor,
         programClassPool.accept(classPoolvisitor);
         libraryClassPool.accept(classPoolvisitor);
 
-        // Print out notes about argument types that are not being kept in
-        // class members that are being kept.
-        programClassPool.classesAccept(
-            new AllMemberVisitor(
-            new KeptMemberFilter(this)));
+        // Print out notes about argument types that are not being kept.
+        programClassPool.classesAccept(new AllMemberVisitor(this));
     }
 
 
@@ -97,42 +94,39 @@ implements   MemberVisitor,
 
     public void visitProgramField(ProgramClass programClass, ProgramField programField)
     {
-        //referencingClass  = programClass;
-        //referencingMember = programField;
-        //isField           = true;
-        //
-        // Don't check the type, because it is not required for introspection.
-        //programField.referencedClassesAccept(this);
+        if (KeepMarker.isKept(programField))
+        {
+            referencingClass  = programClass;
+            referencingMember = programField;
+            isField           = true;
+
+            // Don't check the type, because it is not required for introspection.
+            //programField.referencedClassesAccept(this);
+        }
     }
 
 
     public void visitProgramMethod(ProgramClass programClass, ProgramMethod programMethod)
     {
-        referencingClass  = programClass;
-        referencingMember = programMethod;
-        isField           = false;
-
-        // Don't check the return type, because it is not required for
-        // introspection (e.g. the return type of the special Enum methods).
-        //programMethod.referencedClassesAccept(this);
-
-        Clazz[] referencedClasses = programMethod.referencedClasses;
-        if (referencedClasses != null)
+        if (KeepMarker.isKept(programMethod))
         {
-            int count = referencedClasses.length;
+            referencingClass  = programClass;
+            referencingMember = programMethod;
+            isField           = false;
 
-            // Adapt the count if the return type is a class type (not so
-            // pretty; assuming test just checks for final ';').
-            if (ClassUtil.isInternalClassType(programMethod.getDescriptor(programClass)))
-            {
-                count--;
-            }
+            // Don't check the return type, because it is not required for
+            // introspection (e.g. the return type of the special Enum methods).
+            //programMethod.referencedClassesAccept(this);
 
-            for (int index = 0; index < count; index++)
+            Clazz[] referencedClasses = programMethod.referencedClasses;
+            if (referencedClasses != null)
             {
-                if (referencedClasses[index] != null)
+                for (int index = 0; index < referencedClasses.length-1; index++)
                 {
-                    referencedClasses[index].accept(this);
+                    if (referencedClasses[index] != null)
+                    {
+                        referencedClasses[index].accept(this);
+                    }
                 }
             }
         }

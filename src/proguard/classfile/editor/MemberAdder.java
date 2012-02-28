@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -26,9 +26,8 @@ import proguard.classfile.util.SimplifiedVisitor;
 import proguard.classfile.visitor.MemberVisitor;
 
 /**
- * This MemberVisitor copies all class members that it visits to the given
- * target class. Their visitor info is set to the class members from which they
- * were copied.
+ * This ConstantVisitor adds all class members that it visits to the given
+ * target class.
  *
  * @author Eric Lafortune
  */
@@ -46,9 +45,8 @@ implements   MemberVisitor
     private static final Attribute[] EMPTY_ATTRIBUTES = new Attribute[0];
 
 
-    private final ProgramClass  targetClass;
-//  private final boolean       addFields;
-    private final MemberVisitor extraMemberVisitor;
+    private final ProgramClass targetClass;
+//    private final boolean      addFields;
 
     private final ConstantAdder      constantAdder;
     private final ClassEditor        classEditor;
@@ -61,30 +59,13 @@ implements   MemberVisitor
      * @param targetClass the class to which all visited class members will be
      *                    added.
      */
-    public MemberAdder(ProgramClass targetClass)
-    {
-        this(targetClass, null);
-    }
-
-
-    /**
-     * Creates a new MemberAdder that will copy methods into the given target
-     * class.
-     * @param targetClass        the class to which all visited class members
-     *                           will be added.
-     * @param extraMemberVisitor an optional member visitor that visits each
-     *                           new member right after it has been added. This
-     *                           allows changing the visitor info, for instance.
-     */
 //     * @param addFields   specifies whether fields should be added, or fused
 //     *                    with the present fields.
-    public MemberAdder(ProgramClass  targetClass,
-//                     boolean       addFields,
-                       MemberVisitor extraMemberVisitor)
+    public MemberAdder(ProgramClass targetClass)//),
+//                       boolean      addFields)
     {
-        this.targetClass        = targetClass;
-//      this.addFields          = addFields;
-        this.extraMemberVisitor = extraMemberVisitor;
+        this.targetClass = targetClass;
+//        this.addFields   = addFields;
 
         constantAdder      = new ConstantAdder(targetClass);
         classEditor        = new ClassEditor(targetClass);
@@ -169,12 +150,6 @@ implements   MemberVisitor
 
         // Add the completed field.
         classEditor.addField(newProgramField);
-
-        // Visit the newly added field, if necessary.
-        if (extraMemberVisitor != null)
-        {
-            extraMemberVisitor.visitProgramField(targetClass, newProgramField);
-        }
     }
 
 
@@ -265,12 +240,6 @@ implements   MemberVisitor
 
         // Add the completed method.
         classEditor.addMethod(newProgramMethod);
-
-        // Visit the newly added method, if necessary.
-        if (extraMemberVisitor != null)
-        {
-            extraMemberVisitor.visitProgramMethod(targetClass, newProgramMethod);
-        }
     }
 
 

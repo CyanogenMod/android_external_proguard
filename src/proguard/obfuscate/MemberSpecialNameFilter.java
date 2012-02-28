@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -54,7 +54,7 @@ public class MemberSpecialNameFilter implements MemberVisitor
 
     public void visitProgramField(ProgramClass programClass, ProgramField programField)
     {
-        if (hasSpecialName(programField))
+        if (isSpecialName(programField))
         {
             memberVisitor.visitProgramField(programClass, programField);
         }
@@ -63,7 +63,7 @@ public class MemberSpecialNameFilter implements MemberVisitor
 
     public void visitProgramMethod(ProgramClass programClass, ProgramMethod programMethod)
     {
-        if (hasSpecialName(programMethod))
+        if (isSpecialName(programMethod))
         {
             memberVisitor.visitProgramMethod(programClass, programMethod);
         }
@@ -72,7 +72,7 @@ public class MemberSpecialNameFilter implements MemberVisitor
 
     public void visitLibraryField(LibraryClass libraryClass, LibraryField libraryField)
     {
-        if (hasSpecialName(libraryField))
+        if (isSpecialName(libraryField))
         {
             memberVisitor.visitLibraryField(libraryClass, libraryField);
         }
@@ -81,7 +81,7 @@ public class MemberSpecialNameFilter implements MemberVisitor
 
     public void visitLibraryMethod(LibraryClass libraryClass, LibraryMethod libraryMethod)
     {
-        if (hasSpecialName(libraryMethod))
+        if (isSpecialName(libraryMethod))
         {
             memberVisitor.visitLibraryMethod(libraryClass, libraryMethod);
         }
@@ -94,7 +94,7 @@ public class MemberSpecialNameFilter implements MemberVisitor
      * Returns whether the given class member has a special new name.
      * @param member the class member.
      */
-    private static boolean hasSpecialName(Member member)
+    private static boolean isSpecialName(Member member)
     {
         return SpecialNameFactory.isSpecialName(MemberObfuscator.newMemberName(member));
     }

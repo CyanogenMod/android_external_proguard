@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -30,6 +30,9 @@ import proguard.evaluation.value.Value;
  * stores. It then generalizes a given collected Value with the producer Value
  * of each Value it loads. The producer Value and the initial collected Value
  * can be set; the generalized collected Value can be retrieved.
+ * <p>
+ * In addition, an initialization index can be reset and retrieved, pointing
+ * to the most recent variable that has been initialized by a store operation.
  *
  * @author Eric Lafortune
  */
@@ -40,6 +43,7 @@ public class TracedVariables extends Variables
 
     private Value     producerValue;
     private Variables producerVariables;
+    private int       initializationIndex;
 
 
     /**
@@ -70,6 +74,24 @@ public class TracedVariables extends Variables
     public void setProducerValue(Value producerValue)
     {
         this.producerValue = producerValue;
+    }
+
+
+    /**
+     * Resets the initialization index.
+     */
+    public void resetInitialization()
+    {
+        initializationIndex = NONE;
+    }
+
+
+    /**
+     * Returns the most recent initialization index since it has been reset.
+     */
+    public int getInitializationIndex()
+    {
+        return initializationIndex;
     }
 
 
@@ -142,6 +164,14 @@ public class TracedVariables extends Variables
 
     public void store(int index, Value value)
     {
+        // Is this store operation an initialization of the variable?
+        Value previousValue = super.load(index);
+        if (previousValue == null ||
+            previousValue.computationalType() != value.computationalType())
+        {
+            initializationIndex = index;
+        }
+
         // Store the value itself in the variable.
         super.store(index, value);
 

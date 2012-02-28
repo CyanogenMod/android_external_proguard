@@ -8,7 +8,8 @@
 # Specify the input, output, and library jars.
 # This is assuming the code has been compiled in the examples directory.
 
--injars  examples(*.class)
+#-injars  examples(*.class)
+-injars  classes(*.class)
 -outjars out
 
 -libraryjars <java.home>/lib/rt.jar

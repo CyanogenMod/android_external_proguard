@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -25,9 +25,8 @@ import proguard.classfile.util.SimplifiedVisitor;
 import proguard.classfile.visitor.ClassVisitor;
 
 /**
- * This ClassVisitor marks all program classes that it visits as caught.
- * This means that these classes are exception classes that occur in exception
- * handlers.
+ * This InstructionVisitor marks all classes that are used in an 'instanceof'
+ * test by any of the instructions that it visits.
  *
  * @author Eric Lafortune
  */

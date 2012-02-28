@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -63,10 +63,9 @@ final class ClassSpecificationDialog extends JDialog
     private final JRadioButton[] publicRadioButtons;
     private final JRadioButton[] finalRadioButtons;
     private final JRadioButton[] abstractRadioButtons;
-    private final JRadioButton[] interfaceRadioButtons;
-    private final JRadioButton[] annotationRadioButtons;
     private final JRadioButton[] enumRadioButtons;
-    private final JRadioButton[] syntheticRadioButtons;
+    private final JRadioButton[] annotationRadioButtons;
+    private final JRadioButton[] interfaceRadioButtons;
 
     private final JTextField annotationTypeTextField        = new JTextField(20);
     private final JTextField classNameTextField             = new JTextField(20);
@@ -200,10 +199,9 @@ final class ClassSpecificationDialog extends JDialog
         publicRadioButtons     = addRadioButtonTriplet("Public",     accessPanel);
         finalRadioButtons      = addRadioButtonTriplet("Final",      accessPanel);
         abstractRadioButtons   = addRadioButtonTriplet("Abstract",   accessPanel);
-        interfaceRadioButtons  = addRadioButtonTriplet("Interface",  accessPanel);
-        annotationRadioButtons = addRadioButtonTriplet("Annotation", accessPanel);
         enumRadioButtons       = addRadioButtonTriplet("Enum",       accessPanel);
-        syntheticRadioButtons  = addRadioButtonTriplet("Synthetic",  accessPanel);
+        annotationRadioButtons = addRadioButtonTriplet("Annotation", accessPanel);
+        interfaceRadioButtons  = addRadioButtonTriplet("Interface",  accessPanel);
 
         // Create the annotation type panel.
         final JPanel annotationTypePanel = new JPanel(layout);
@@ -395,10 +393,9 @@ final class ClassSpecificationDialog extends JDialog
         setClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_PUBLIC,      publicRadioButtons);
         setClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_FINAL,       finalRadioButtons);
         setClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_ABSTRACT,    abstractRadioButtons);
-        setClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_INTERFACE,   interfaceRadioButtons);
-        setClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_ANNOTATTION, annotationRadioButtons);
         setClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_ENUM,        enumRadioButtons);
-        setClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_SYNTHETIC,   syntheticRadioButtons);
+        setClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_ANNOTATTION, annotationRadioButtons);
+        setClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_INTERFACE,   interfaceRadioButtons);
 
         // Set the class and annotation text fields.
         annotationTypeTextField       .setText(annotationType        == null ? ""  : ClassUtil.externalType(annotationType));
@@ -456,10 +453,9 @@ final class ClassSpecificationDialog extends JDialog
         getClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_PUBLIC,      publicRadioButtons);
         getClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_FINAL,       finalRadioButtons);
         getClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_ABSTRACT,    abstractRadioButtons);
-        getClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_INTERFACE,   interfaceRadioButtons);
-        getClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_ANNOTATTION, annotationRadioButtons);
         getClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_ENUM,        enumRadioButtons);
-        getClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_SYNTHETIC,   syntheticRadioButtons);
+        getClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_ANNOTATTION, annotationRadioButtons);
+        getClassSpecificationRadioButtons(classSpecification, ClassConstants.INTERNAL_ACC_INTERFACE,   interfaceRadioButtons);
 
         // Get the keep class member option lists.
         classSpecification.fieldSpecifications  = memberSpecificationsPanel.getMemberSpecifications(true);

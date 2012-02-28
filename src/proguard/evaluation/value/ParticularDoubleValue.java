@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -79,23 +79,17 @@ final class ParticularDoubleValue extends SpecificDoubleValue
 
     public DoubleValue add(DoubleValue other)
     {
-        // Careful: -0.0 + 0.0 == 0.0
-        //return value == 0.0 ? other : other.add(this);
-        return other.add(this);
+        return value == 0.0 ? other : other.add(this);
     }
 
     public DoubleValue subtract(DoubleValue other)
     {
-        // Careful: -0.0 + 0.0 == 0.0
-        //return value == 0.0 ? other.negate() : other.subtractFrom(this);
-        return other.subtractFrom(this);
+        return value == 0.0 ? other.negate() : other.subtractFrom(this);
     }
 
     public DoubleValue subtractFrom(DoubleValue other)
     {
-        // Careful: -0.0 + 0.0 == 0.0
-        //return value == 0.0 ? other : other.subtract(this);
-        return other.subtract(this);
+        return value == 0.0 ? other : other.subtract(this);
     }
 
     public DoubleValue multiply(DoubleValue other)

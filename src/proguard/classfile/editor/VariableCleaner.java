@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -22,15 +22,15 @@ package proguard.classfile.editor;
 
 import proguard.classfile.*;
 import proguard.classfile.attribute.*;
-import proguard.classfile.attribute.visitor.AttributeVisitor;
+import proguard.classfile.attribute.visitor.*;
+import proguard.classfile.instruction.*;
+import proguard.classfile.instruction.visitor.InstructionVisitor;
 import proguard.classfile.util.SimplifiedVisitor;
-
-import java.util.Arrays;
+import proguard.optimize.info.VariableUsageMarker;
 
 /**
- * This AttributeVisitor cleans up variable tables in all code attributes that
- * it visits. It trims overlapping local variables. It removes empty local
- * variables and empty local variable tables.
+ * This AttributeVisitor cleans up unused variables in all attributes that it
+ * visits.
  *
  * @author Eric Lafortune
  */
@@ -38,8 +38,7 @@ public class VariableCleaner
 extends      SimplifiedVisitor
 implements   AttributeVisitor
 {
-    private boolean deleteLocalVariableTableAttribute;
-    private boolean deleteLocalVariableTypeTableAttribute;
+    private final VariableUsageMarker variableUsageMarker = new VariableUsageMarker();
 
 
     // Implementations for AttributeVisitor.
@@ -49,35 +48,11 @@ implements   AttributeVisitor
 
     public void visitCodeAttribute(Clazz clazz, Method method, CodeAttribute codeAttribute)
     {
-        deleteLocalVariableTableAttribute     = false;
-        deleteLocalVariableTypeTableAttribute = false;
+        // Figure out the local variables that are used by the code.
+        variableUsageMarker.visitCodeAttribute(clazz, method, codeAttribute);
 
-        // Trim the local variable table and the local variable type table.
+        // Clean up the variables of the attributes.
         codeAttribute.attributesAccept(clazz, method, this);
-
-        // Delete the local variable table if it ended up empty.
-        if (deleteLocalVariableTableAttribute)
-        {
-            AttributesEditor editor =
-                new AttributesEditor((ProgramClass)clazz,
-                                     (ProgramMember)method,
-                                     codeAttribute,
-                                     true);
-
-            editor.deleteAttribute(ClassConstants.ATTR_LocalVariableTable);
-        }
-
-        // Delete the local variable type table if it ended up empty.
-        if (deleteLocalVariableTypeTableAttribute)
-        {
-            AttributesEditor editor =
-                new AttributesEditor((ProgramClass)clazz,
-                                     (ProgramMember)method,
-                                     codeAttribute,
-                                     true);
-
-            editor.deleteAttribute(ClassConstants.ATTR_LocalVariableTypeTable);
-        }
     }
 
 
@@ -85,20 +60,9 @@ implements   AttributeVisitor
     {
         // Clean up local variables that aren't used.
         localVariableTableAttribute.u2localVariableTableLength =
-            removeUnusedLocalVariables(localVariableTableAttribute.localVariableTable,
-                                       localVariableTableAttribute.u2localVariableTableLength,
-                                       codeAttribute.u2maxLocals);
-
-        // Trim the code blocks of the local variables.
-        trimLocalVariables(localVariableTableAttribute.localVariableTable,
-                           localVariableTableAttribute.u2localVariableTableLength,
-                           codeAttribute.u2maxLocals);
-
-        // Delete the attribute in a moment, if it is empty.
-        if (localVariableTableAttribute.u2localVariableTableLength == 0)
-        {
-            deleteLocalVariableTableAttribute = true;
-        }
+            removeEmptyLocalVariables(localVariableTableAttribute.localVariableTable,
+                                      localVariableTableAttribute.u2localVariableTableLength,
+                                      codeAttribute.u2maxLocals);
     }
 
 
@@ -106,20 +70,9 @@ implements   AttributeVisitor
     {
         // Clean up local variables that aren't used.
         localVariableTypeTableAttribute.u2localVariableTypeTableLength =
-            removeUnusedLocalVariableTypes(localVariableTypeTableAttribute.localVariableTypeTable,
-                                           localVariableTypeTableAttribute.u2localVariableTypeTableLength,
-                                           codeAttribute.u2maxLocals);
-
-        // Trim the code blocks of the local variables.
-        trimLocalVariableTypes(localVariableTypeTableAttribute.localVariableTypeTable,
-                               localVariableTypeTableAttribute.u2localVariableTypeTableLength,
-                               codeAttribute.u2maxLocals);
-
-        // Delete the attribute in a moment, if it is empty.
-        if (localVariableTypeTableAttribute.u2localVariableTypeTableLength == 0)
-        {
-            deleteLocalVariableTypeTableAttribute = true;
-        }
+            removeEmptyLocalVariableTypes(localVariableTypeTableAttribute.localVariableTypeTable,
+                                          localVariableTypeTableAttribute.u2localVariableTypeTableLength,
+                                          codeAttribute.u2maxLocals);
     }
 
 
@@ -127,28 +80,27 @@ implements   AttributeVisitor
 
     /**
      * Returns the given list of local variables, without the ones that aren't
-     * used.
+     * used
      */
-    private int removeUnusedLocalVariables(LocalVariableInfo[] localVariableInfos,
-                                           int                 localVariableInfoCount,
-                                           int                 maxLocals)
+    private int removeEmptyLocalVariables(LocalVariableInfo[] localVariableInfos,
+                                          int                 localVariableInfoCount,
+                                          int                 maxLocals)
     {
         // Overwrite all empty local variable entries.
         int newIndex = 0;
-        for (int index = 0; index < localVariableInfoCount; index++)
+        for (int index = 0; index < localVariableInfoCount && index < maxLocals; index++)
         {
-            LocalVariableInfo localVariableInfo = localVariableInfos[index];
-
-            if (localVariableInfo.u2index >= 0        &&
-                localVariableInfo.u2index < maxLocals &&
-                localVariableInfo.u2length > 0)
+            if (variableUsageMarker.isVariableUsed(index))
             {
                 localVariableInfos[newIndex++] = localVariableInfos[index];
             }
         }
 
         // Clean up any remaining array elements.
-        Arrays.fill(localVariableInfos,  newIndex, localVariableInfoCount, null);
+        for (int index = newIndex; index < localVariableInfoCount; index++)
+        {
+            localVariableInfos[index] = null;
+        }
 
         return newIndex;
     }
@@ -156,112 +108,28 @@ implements   AttributeVisitor
 
     /**
      * Returns the given list of local variable types, without the ones that
-     * aren't used.
+     * aren't used
      */
-    private int removeUnusedLocalVariableTypes(LocalVariableTypeInfo[] localVariableTypeInfos,
-                                               int                     localVariableTypeInfoCount,
-                                               int                     maxLocals)
+    private int removeEmptyLocalVariableTypes(LocalVariableTypeInfo[] localVariableTypeInfos,
+                                              int                     localVariableTypeInfoCount,
+                                              int                     maxLocals)
     {
         // Overwrite all empty local variable type entries.
         int newIndex = 0;
-        for (int index = 0; index < localVariableTypeInfoCount; index++)
+        for (int index = 0; index < localVariableTypeInfoCount && index < maxLocals; index++)
         {
-            LocalVariableTypeInfo localVariableTypeInfo = localVariableTypeInfos[index];
-
-            if (localVariableTypeInfo.u2index >= 0        &&
-                localVariableTypeInfo.u2index < maxLocals &&
-                localVariableTypeInfo.u2length > 0)
+            if (variableUsageMarker.isVariableUsed(index))
             {
                 localVariableTypeInfos[newIndex++] = localVariableTypeInfos[index];
             }
         }
 
         // Clean up any remaining array elements.
-        Arrays.fill(localVariableTypeInfos,  newIndex, localVariableTypeInfoCount, null);
+        for (int index = newIndex; index < localVariableTypeInfoCount; index++)
+        {
+            localVariableTypeInfos[index] = null;
+        }
 
         return newIndex;
-    }
-
-
-    /**
-     * Sorts the given list of local variables and trims their code blocks
-     * when necessary. The block is trimmed at the end, which is a bit
-     * arbitrary.
-     */
-    private void trimLocalVariables(LocalVariableInfo[] localVariableInfos,
-                                    int                 localVariableInfoCount,
-                                    int                 maxLocals)
-    {
-        // Sort the local variable entries.
-        Arrays.sort(localVariableInfos, 0, localVariableInfoCount);
-
-        int[] startPCs = createMaxArray(maxLocals);
-
-        // Trim the local variable entries, starting at the last one.
-        for (int index = localVariableInfoCount-1; index >= 0; index--)
-        {
-            LocalVariableInfo localVariableInfo = localVariableInfos[index];
-
-            // Make sure the variable's code block doesn't overlap with the
-            // next one for the same variable.
-            int maxLength = startPCs[localVariableInfo.u2index] -
-                            localVariableInfo.u2startPC;
-
-            if (localVariableInfo.u2length > maxLength)
-            {
-                localVariableInfo.u2length = maxLength;
-            }
-
-            startPCs[localVariableInfo.u2index] = localVariableInfo.u2startPC;
-        }
-    }
-
-
-    /**
-     * Sorts the given list of local variable types and trims their code blocks
-     * when necessary. The block is trimmed at the end, which is a bit
-     * arbitrary.
-     */
-    private void trimLocalVariableTypes(LocalVariableTypeInfo[] localVariableTypeInfos,
-                                        int                     localVariableTypeInfoCount,
-                                        int                     maxLocals)
-    {
-        // Sort the local variable entries.
-        Arrays.sort(localVariableTypeInfos, 0, localVariableTypeInfoCount);
-
-        int[] startPCs = createMaxArray(maxLocals);
-
-        // Trim the local variable entries, starting at the last one.
-        for (int index = localVariableTypeInfoCount-1; index >= 0; index--)
-        {
-            LocalVariableTypeInfo localVariableTypeInfo = localVariableTypeInfos[index];
-
-            // Make sure the variable's code block doesn't overlap with the
-            // next one for the same variable.
-            int maxLength = startPCs[localVariableTypeInfo.u2index] -
-                            localVariableTypeInfo.u2startPC;
-
-            if (localVariableTypeInfo.u2length > maxLength)
-            {
-                localVariableTypeInfo.u2length = maxLength;
-            }
-
-            startPCs[localVariableTypeInfo.u2index] = localVariableTypeInfo.u2startPC;
-        }
-    }
-
-
-    /**
-     * Creates an integer array of the given length, initialized with
-     * Integer.MAX_VALUE.
-     */
-    private int[] createMaxArray(int length)
-    {
-        int[] startPCs = new int[length];
-        for (int index = 0; index < length; index++)
-        {
-            startPCs[index] = Integer.MAX_VALUE;
-        }
-        return startPCs;
     }
 }

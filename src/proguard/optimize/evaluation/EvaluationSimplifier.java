@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -43,9 +43,6 @@ extends      SimplifiedVisitor
 implements   AttributeVisitor,
              InstructionVisitor
 {
-    private static int  POS_ZERO_FLOAT_BITS  = Float.floatToIntBits(0.0f);
-    private static long POS_ZERO_DOUBLE_BITS = Double.doubleToLongBits(0.0);
-
     //*
     private static final boolean DEBUG = false;
     /*/
@@ -562,11 +559,10 @@ implements   AttributeVisitor,
         Value pushedValue = partialEvaluator.getStackAfter(offset).getTop(0);
         if (pushedValue.isParticular())
         {
-            // Make sure to distinguish between +0.0 and -0.0.
             float value = pushedValue.floatValue().value();
-            if (value == 0.0f && Float.floatToIntBits(value) == POS_ZERO_FLOAT_BITS ||
-                value == 1.0f ||
-                value == 2.0f)
+            if (value == 0f ||
+                value == 1f ||
+                value == 2f)
             {
                 replaceConstantPushInstruction(clazz,
                                                offset,
@@ -631,9 +627,8 @@ implements   AttributeVisitor,
         Value pushedValue = partialEvaluator.getStackAfter(offset).getTop(0);
         if (pushedValue.isParticular())
         {
-            // Make sure to distinguish between +0.0 and -0.0.
             double value = pushedValue.doubleValue().value();
-            if (value == 0.0 && Double.doubleToLongBits(value) == POS_ZERO_DOUBLE_BITS ||
+            if (value == 0.0 ||
                 value == 1.0)
             {
                 replaceConstantPushInstruction(clazz,

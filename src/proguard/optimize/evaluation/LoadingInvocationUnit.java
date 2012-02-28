@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -35,9 +35,9 @@ import proguard.evaluation.value.*;
 public class LoadingInvocationUnit
 extends      BasicInvocationUnit
 {
-    private final boolean loadFieldValues;
-    private final boolean loadMethodParameterValues;
-    private final boolean loadMethodReturnValues;
+    private boolean loadFieldValues;
+    private boolean loadMethodParameterValues;
+    private boolean loadMethodReturnValues;
 
 
     /**
@@ -84,6 +84,8 @@ extends      BasicInvocationUnit
                     value.isParticular())
                 {
                     return value;
+//                // Make sure the value is refreshed.
+//                return refresh(value);
                 }
             }
         }
@@ -108,6 +110,8 @@ extends      BasicInvocationUnit
                     value.isParticular())
                 {
                     return value;
+//                // Make sure the value is refreshed.
+//                return refresh(value);
                 }
             }
         }
@@ -130,6 +134,8 @@ extends      BasicInvocationUnit
                 value.isParticular())
             {
                 return value;
+//            // Make sure the value is refreshed.
+//            return refresh(value);
             }
         }
 
@@ -157,6 +163,8 @@ extends      BasicInvocationUnit
                     value.isParticular())
                 {
                     return value;
+//                // Make sure the value is refreshed.
+//                return refresh(value);
                 }
             }
         }
@@ -165,8 +173,8 @@ extends      BasicInvocationUnit
                                           refConstant,
                                           type);
     }
-
-
+//
+//
 //    // Small utility methods.
 //
 //    private Value refresh(Value value)

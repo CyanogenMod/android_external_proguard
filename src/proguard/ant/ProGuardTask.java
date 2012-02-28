@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -215,12 +215,6 @@ public class ProGuardTask extends ConfigurationTask
     }
 
 
-    public void setKeepparameternames(boolean keepParameterNames)
-    {
-        configuration.keepParameterNames = keepParameterNames;
-    }
-
-
     public void setRenamesourcefileattribute(String newSourceFileAttribute)
     {
         configuration.newSourceFileAttribute = newSourceFileAttribute;
@@ -247,39 +241,13 @@ public class ProGuardTask extends ConfigurationTask
 
     public void setNote(boolean note)
     {
-        if (note)
-        {
-            // Switch on notes if they were completely disabled.
-            if (configuration.note != null &&
-                configuration.note.isEmpty())
-            {
-                configuration.note = null;
-            }
-        }
-        else
-        {
-            // Switch off notes.
-            configuration.note = new ArrayList();
-        }
+        configuration.note = note ? null : new ArrayList();
     }
 
 
     public void setWarn(boolean warn)
     {
-        if (warn)
-        {
-            // Switch on warnings if they were completely disabled.
-            if (configuration.warn != null &&
-                configuration.warn.isEmpty())
-            {
-                configuration.warn = null;
-            }
-        }
-        else
-        {
-            // Switch off warnings.
-            configuration.warn = new ArrayList();
-        }
+        configuration.warn = warn ? null : new ArrayList();
     }
 
 

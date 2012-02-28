@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -29,8 +29,6 @@ import proguard.classfile.instruction.*;
 import proguard.classfile.instruction.visitor.InstructionVisitor;
 import proguard.classfile.util.SimplifiedVisitor;
 
-import java.util.Arrays;
-
 /**
  * This AttributeVisitor accumulates instructions and exceptions, and then
  * copies them into code attributes that it visits.
@@ -51,7 +49,7 @@ implements   AttributeVisitor,
     //*
     private static final boolean DEBUG = false;
     /*/
-    public  static       boolean DEBUG = false;
+    public  static       boolean DEBUG = true;
     //*/
 
 
@@ -315,7 +313,7 @@ implements   AttributeVisitor,
                 int handlerPC = -exceptionInfo.u2handlerPC;
                 if (handlerPC > 0)
                 {
-                    if (remappableExceptionHandler(handlerPC))
+                    if (remappableInstructionOffset(handlerPC))
                     {
                         exceptionInfo.u2handlerPC = remapInstructionOffset(handlerPC);
                     }
@@ -492,7 +490,7 @@ implements   AttributeVisitor,
         int handlerPC = exceptionInfo.u2handlerPC;
         exceptionInfo.u2handlerPC =
             !allowExternalExceptionHandlers ||
-            remappableExceptionHandler(handlerPC) ?
+            remappableInstructionOffset(handlerPC) ?
                 remapInstructionOffset(handlerPC) :
                 -handlerPC;
     }
@@ -676,21 +674,13 @@ implements   AttributeVisitor,
 
 
     /**
-     * Returns whether the given old exception handler can be remapped in the
-     * current code fragment.
+     * Returns whether the given old instruction offset can be remapped at the
      */
-    private boolean remappableExceptionHandler(int oldInstructionOffset)
+    private boolean remappableInstructionOffset(int oldInstructionOffset)
     {
-        if (oldInstructionOffset > codeFragmentLengths[level])
-        {
-            return false;
-        }
-
-        int newInstructionOffset =
-            instructionOffsetMap[level][oldInstructionOffset];
-
-        return newInstructionOffset > INVALID &&
-               newInstructionOffset < codeLength;
+        return
+            oldInstructionOffset <= codeFragmentLengths[level] &&
+            instructionOffsetMap[level][oldInstructionOffset] > INVALID;
     }
 
 
@@ -713,7 +703,10 @@ implements   AttributeVisitor,
         }
 
         // Clear the unused array entries.
-        Arrays.fill(exceptionInfos, newIndex, exceptionInfoCount, null);
+        for (int index = newIndex; index < exceptionInfoCount; index++)
+        {
+            exceptionInfos[index] = null;
+        }
 
         return newIndex;
     }
@@ -741,7 +734,10 @@ implements   AttributeVisitor,
         }
 
         // Clear the unused array entries.
-        Arrays.fill(lineNumberInfos, newIndex, lineNumberInfoCount, null);
+        for (int index = newIndex; index < lineNumberInfoCount; index++)
+        {
+            lineNumberInfos[index] = null;
+        }
 
         return newIndex;
     }
@@ -768,7 +764,10 @@ implements   AttributeVisitor,
         }
 
         // Clear the unused array entries.
-        Arrays.fill(localVariableInfos, newIndex, localVariableInfoCount, null);
+        for (int index = newIndex; index < localVariableInfoCount; index++)
+        {
+            localVariableInfos[index] = null;
+        }
 
         return newIndex;
     }
@@ -795,7 +794,10 @@ implements   AttributeVisitor,
         }
 
         // Clear the unused array entries.
-        Arrays.fill(localVariableTypeInfos, newIndex, localVariableTypeInfoCount, null);
+        for (int index = newIndex; index < localVariableTypeInfoCount; index++)
+        {
+            localVariableTypeInfos[index] = null;
+        }
 
         return newIndex;
     }

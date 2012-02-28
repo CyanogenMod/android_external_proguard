@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -47,10 +47,9 @@ implements   ClassVisitor,
              ConstantVisitor,
              MemberVisitor,
              AttributeVisitor,
-             BootstrapMethodInfoVisitor,
+             InstructionVisitor,
              InnerClassesInfoVisitor,
              ExceptionInfoVisitor,
-             InstructionVisitor,
              StackMapFrameVisitor,
              VerificationTypeVisitor,
              LocalVariableInfoVisitor,
@@ -58,7 +57,7 @@ implements   ClassVisitor,
              AnnotationVisitor,
              ElementValueVisitor
 {
-    private final CodeAttributeEditor codeAttributeEditor = new CodeAttributeEditor(false);
+    private final CodeAttributeEditor codeAttributeEditor = new CodeAttributeEditor();
 
     private int[] constantIndexMap;
 
@@ -101,15 +100,25 @@ implements   ClassVisitor,
 
     // Implementations for ConstantVisitor.
 
-    public void visitIntegerConstant(Clazz clazz, IntegerConstant integerConstant)
+    public void visitClassConstant(Clazz clazz, ClassConstant classConstant)
+    {
+        classConstant.u2nameIndex =
+            remapConstantIndex(classConstant.u2nameIndex);
+    }
+
+
+    public void visitDoubleConstant(Clazz clazz, DoubleConstant doubleConstant)
     {
         // Nothing to do.
     }
 
 
-    public void visitLongConstant(Clazz clazz, LongConstant longConstant)
+    public void visitFieldrefConstant(Clazz clazz, FieldrefConstant fieldrefConstant)
     {
-        // Nothing to do.
+        fieldrefConstant.u2classIndex =
+            remapConstantIndex(fieldrefConstant.u2classIndex);
+        fieldrefConstant.u2nameAndTypeIndex =
+            remapConstantIndex(fieldrefConstant.u2nameAndTypeIndex);
     }
 
 
@@ -119,9 +128,42 @@ implements   ClassVisitor,
     }
 
 
-    public void visitDoubleConstant(Clazz clazz, DoubleConstant doubleConstant)
+    public void visitIntegerConstant(Clazz clazz, IntegerConstant integerConstant)
     {
         // Nothing to do.
+    }
+
+
+    public void visitInterfaceMethodrefConstant(Clazz clazz, InterfaceMethodrefConstant interfaceMethodrefConstant)
+    {
+        interfaceMethodrefConstant.u2classIndex =
+            remapConstantIndex(interfaceMethodrefConstant.u2classIndex);
+        interfaceMethodrefConstant.u2nameAndTypeIndex =
+            remapConstantIndex(interfaceMethodrefConstant.u2nameAndTypeIndex);
+    }
+
+
+    public void visitLongConstant(Clazz clazz, LongConstant longConstant)
+    {
+        // Nothing to do.
+    }
+
+
+    public void visitMethodrefConstant(Clazz clazz, MethodrefConstant methodrefConstant)
+    {
+        methodrefConstant.u2classIndex =
+            remapConstantIndex(methodrefConstant.u2classIndex);
+        methodrefConstant.u2nameAndTypeIndex =
+            remapConstantIndex(methodrefConstant.u2nameAndTypeIndex);
+    }
+
+
+    public void visitNameAndTypeConstant(Clazz clazz, NameAndTypeConstant nameAndTypeConstant)
+    {
+        nameAndTypeConstant.u2nameIndex =
+            remapConstantIndex(nameAndTypeConstant.u2nameIndex);
+        nameAndTypeConstant.u2descriptorIndex =
+            remapConstantIndex(nameAndTypeConstant.u2descriptorIndex);
     }
 
 
@@ -135,70 +177,6 @@ implements   ClassVisitor,
     public void visitUtf8Constant(Clazz clazz, Utf8Constant utf8Constant)
     {
         // Nothing to do.
-    }
-
-
-    public void visitInvokeDynamicConstant(Clazz clazz, InvokeDynamicConstant invokeDynamicConstant)
-    {
-        invokeDynamicConstant.u2nameAndTypeIndex =
-            remapConstantIndex(invokeDynamicConstant.u2nameAndTypeIndex);
-    }
-
-
-    public void visitMethodHandleConstant(Clazz clazz, MethodHandleConstant methodHandleConstant)
-    {
-        methodHandleConstant.u2referenceIndex =
-            remapConstantIndex(methodHandleConstant.u2referenceIndex);
-    }
-
-
-    public void visitFieldrefConstant(Clazz clazz, FieldrefConstant fieldrefConstant)
-    {
-        fieldrefConstant.u2classIndex =
-            remapConstantIndex(fieldrefConstant.u2classIndex);
-        fieldrefConstant.u2nameAndTypeIndex =
-            remapConstantIndex(fieldrefConstant.u2nameAndTypeIndex);
-    }
-
-
-    public void visitInterfaceMethodrefConstant(Clazz clazz, InterfaceMethodrefConstant interfaceMethodrefConstant)
-    {
-        interfaceMethodrefConstant.u2classIndex =
-            remapConstantIndex(interfaceMethodrefConstant.u2classIndex);
-        interfaceMethodrefConstant.u2nameAndTypeIndex =
-            remapConstantIndex(interfaceMethodrefConstant.u2nameAndTypeIndex);
-    }
-
-
-    public void visitMethodrefConstant(Clazz clazz, MethodrefConstant methodrefConstant)
-    {
-        methodrefConstant.u2classIndex =
-            remapConstantIndex(methodrefConstant.u2classIndex);
-        methodrefConstant.u2nameAndTypeIndex =
-            remapConstantIndex(methodrefConstant.u2nameAndTypeIndex);
-    }
-
-
-    public void visitClassConstant(Clazz clazz, ClassConstant classConstant)
-    {
-        classConstant.u2nameIndex =
-            remapConstantIndex(classConstant.u2nameIndex);
-    }
-
-
-    public void visitMethodTypeConstant(Clazz clazz, MethodTypeConstant methodTypeConstant)
-    {
-        methodTypeConstant.u2descriptorIndex =
-            remapConstantIndex(methodTypeConstant.u2descriptorIndex);
-    }
-
-
-    public void visitNameAndTypeConstant(Clazz clazz, NameAndTypeConstant nameAndTypeConstant)
-    {
-        nameAndTypeConstant.u2nameIndex =
-            remapConstantIndex(nameAndTypeConstant.u2nameIndex);
-        nameAndTypeConstant.u2descriptorIndex =
-            remapConstantIndex(nameAndTypeConstant.u2descriptorIndex);
     }
 
 
@@ -249,16 +227,6 @@ implements   ClassVisitor,
             remapConstantIndex(unknownAttribute.u2attributeNameIndex);
 
         // There's not much else we can do with unknown attributes.
-    }
-
-
-    public void visitBootstrapMethodsAttribute(Clazz clazz, BootstrapMethodsAttribute bootstrapMethodsAttribute)
-    {
-        bootstrapMethodsAttribute.u2attributeNameIndex =
-            remapConstantIndex(bootstrapMethodsAttribute.u2attributeNameIndex);
-
-        // Remap the constant pool references of the bootstrap method entries.
-        bootstrapMethodsAttribute.bootstrapMethodEntriesAccept(clazz, this);
     }
 
 
@@ -439,19 +407,6 @@ implements   ClassVisitor,
 
         // Remap the constant pool references of the annotations.
         annotationDefaultAttribute.defaultValueAccept(clazz, this);
-    }
-
-
-    // Implementations for BootstrapMethodInfoVisitor.
-
-    public void visitBootstrapMethodInfo(Clazz clazz, BootstrapMethodInfo bootstrapMethodInfo)
-    {
-        bootstrapMethodInfo.u2methodHandleIndex =
-            remapConstantIndex(bootstrapMethodInfo.u2methodHandleIndex);
-
-        // Remap the constant pool references of the bootstrap methods..
-        remapConstantIndexArray(bootstrapMethodInfo.u2methodArguments,
-                                bootstrapMethodInfo.u2methodArgumentCount);
     }
 
 

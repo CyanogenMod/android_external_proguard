@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -93,9 +93,13 @@ implements   ConstantVisitor
     public byte canonicalOpcode()
     {
         // Remove the _w extension, if any.
-        return
-            opcode == InstructionConstants.OP_LDC_W ? InstructionConstants.OP_LDC :
-                                                      opcode;
+        switch (opcode)
+        {
+            case InstructionConstants.OP_LDC_W:
+            case InstructionConstants.OP_LDC2_W: return InstructionConstants.OP_LDC;
+
+            default: return opcode;
+        }
     }
 
     public Instruction shrink()
@@ -181,8 +185,7 @@ implements   ConstantVisitor
             case InstructionConstants.OP_INVOKESPECIAL:
             case InstructionConstants.OP_INVOKESTATIC:
             case InstructionConstants.OP_INVOKEINTERFACE:
-            case InstructionConstants.OP_INVOKEDYNAMIC:
-                // Some parameters may be popped from the stack.
+                // The some parameters may be popped from the stack.
                 clazz.constantPoolEntryAccept(constantIndex, this);
                 stackPopCount += parameterStackDelta;
                 break;
@@ -205,7 +208,6 @@ implements   ConstantVisitor
             case InstructionConstants.OP_INVOKESPECIAL:
             case InstructionConstants.OP_INVOKESTATIC:
             case InstructionConstants.OP_INVOKEINTERFACE:
-            case InstructionConstants.OP_INVOKEDYNAMIC:
                 // The field value or a return value may be pushed onto the stack.
                 clazz.constantPoolEntryAccept(constantIndex, this);
                 stackPushCount += typeStackDelta;
@@ -224,9 +226,8 @@ implements   ConstantVisitor
     public void visitDoubleConstant(Clazz clazz, DoubleConstant doubleConstant) {}
     public void visitStringConstant(Clazz clazz, StringConstant stringConstant) {}
     public void visitUtf8Constant(Clazz clazz, Utf8Constant utf8Constant) {}
-    public void visitMethodHandleConstant(Clazz clazz, MethodHandleConstant methodHandleConstant) {}
     public void visitClassConstant(Clazz clazz, ClassConstant classConstant) {}
-    public void visitMethodTypeConstant(Clazz clazz, MethodTypeConstant methodTypeConstant) {}
+    public void visitNameAndTypeConstant(Clazz clazz, NameAndTypeConstant nameAndTypeConstant) {}
 
 
     public void visitFieldrefConstant(Clazz clazz, FieldrefConstant fieldrefConstant)
@@ -237,27 +238,21 @@ implements   ConstantVisitor
     }
 
 
-    public void visitInvokeDynamicConstant(Clazz clazz, InvokeDynamicConstant invokeDynamicConstant)
-    {
-        clazz.constantPoolEntryAccept(invokeDynamicConstant.u2nameAndTypeIndex, this);
-    }
-
-
     public void visitInterfaceMethodrefConstant(Clazz clazz, InterfaceMethodrefConstant interfaceMethodrefConstant)
     {
-        clazz.constantPoolEntryAccept(interfaceMethodrefConstant.u2nameAndTypeIndex, this);
+        visitRefConstant(clazz, interfaceMethodrefConstant);
     }
 
 
     public void visitMethodrefConstant(Clazz clazz, MethodrefConstant methodrefConstant)
     {
-        clazz.constantPoolEntryAccept(methodrefConstant.u2nameAndTypeIndex, this);
+        visitRefConstant(clazz, methodrefConstant);
     }
 
 
-    public void visitNameAndTypeConstant(Clazz clazz, NameAndTypeConstant nameAndTypeConstant)
+    private void visitRefConstant(Clazz clazz, RefConstant methodrefConstant)
     {
-        String type = nameAndTypeConstant.getType(clazz);
+        String type = methodrefConstant.getType(clazz);
 
         parameterStackDelta = ClassUtil.internalMethodParameterSize(type);
         typeStackDelta      = ClassUtil.internalTypeSize(ClassUtil.internalMethodReturnType(type));
@@ -290,7 +285,6 @@ implements   ConstantVisitor
     private int constantSize()
     {
         return opcode == InstructionConstants.OP_MULTIANEWARRAY  ? 1 :
-               opcode == InstructionConstants.OP_INVOKEDYNAMIC ||
                opcode == InstructionConstants.OP_INVOKEINTERFACE ? 2 :
                                                                    0;
     }

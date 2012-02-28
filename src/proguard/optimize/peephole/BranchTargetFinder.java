@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -28,8 +28,6 @@ import proguard.classfile.constant.visitor.ConstantVisitor;
 import proguard.classfile.instruction.*;
 import proguard.classfile.instruction.visitor.InstructionVisitor;
 import proguard.classfile.util.SimplifiedVisitor;
-
-import java.util.Arrays;
 
 /**
  * This AttributeVisitor finds all instruction offsets, branch targets, and
@@ -314,19 +312,25 @@ implements   AttributeVisitor,
             initializationOffsets = new int[codeLength];
 
             // Reset the arrays.
-            Arrays.fill(subroutineStarts,      0, codeLength, NONE);
-            Arrays.fill(subroutineEnds,        0, codeLength, NONE);
-            Arrays.fill(creationOffsets,       0, codeLength, NONE);
-            Arrays.fill(initializationOffsets, 0, codeLength, NONE);
+            for (int index = 0; index < codeLength; index++)
+            {
+                subroutineStarts[index]      = NONE;
+                subroutineEnds[index]        = NONE;
+                creationOffsets[index]       = NONE;
+                initializationOffsets[index] = NONE;
+            }
         }
         else
         {
             // Reset the arrays.
-            Arrays.fill(instructionMarks,      0, codeLength, (short)0);
-            Arrays.fill(subroutineStarts,      0, codeLength, NONE);
-            Arrays.fill(subroutineEnds,        0, codeLength, NONE);
-            Arrays.fill(creationOffsets,       0, codeLength, NONE);
-            Arrays.fill(initializationOffsets, 0, codeLength, NONE);
+            for (int index = 0; index < codeLength; index++)
+            {
+                instructionMarks[index]      = 0;
+                subroutineStarts[index]      = NONE;
+                subroutineEnds[index]        = NONE;
+                creationOffsets[index]       = NONE;
+                initializationOffsets[index] = NONE;
+            }
 
             instructionMarks[codeLength] = 0;
         }

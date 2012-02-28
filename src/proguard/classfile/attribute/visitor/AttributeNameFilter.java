@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -24,7 +24,7 @@ import proguard.classfile.*;
 import proguard.classfile.attribute.*;
 import proguard.classfile.attribute.annotation.*;
 import proguard.classfile.attribute.preverification.*;
-import proguard.util.*;
+import proguard.util.StringMatcher;
 
 /**
  * This AttributeVisitor delegates its visits another AttributeVisitor, but
@@ -41,21 +41,7 @@ implements   AttributeVisitor
 
 
     /**
-     * Creates a new AttributeNameFilter based on a given name.
-     * @param name             the string matcher that will check the attribute
-     *                         names.
-     * @param attributeVisitor the <code>AttributeVisitor</code> to which
-     *                         visits will be delegated.
-     */
-    public AttributeNameFilter(String           name,
-                               AttributeVisitor attributeVisitor)
-    {
-        this(new FixedStringMatcher(name), attributeVisitor);
-    }
-
-
-    /**
-     * Creates a new AttributeNameFilter based on a given string matcher.
+     * Creates a new AttributeNameFilter.
      * @param stringMatcher    the string matcher that will check the attribute
      *                         names.
      * @param attributeVisitor the <code>AttributeVisitor</code> to which
@@ -76,15 +62,6 @@ implements   AttributeVisitor
         if (accepted(clazz, unknownAttribute))
         {
             unknownAttribute.accept(clazz, attributeVisitor);
-        }
-    }
-
-
-    public void visitBootstrapMethodsAttribute(Clazz clazz, BootstrapMethodsAttribute bootstrapMethodsAttribute)
-    {
-        if (accepted(clazz, bootstrapMethodsAttribute))
-        {
-            bootstrapMethodsAttribute.accept(clazz, attributeVisitor);
         }
     }
 

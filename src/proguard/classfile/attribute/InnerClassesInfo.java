@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -74,7 +74,8 @@ public class InnerClassesInfo implements VisitorAccepter
     {
         if (u2innerClassIndex != 0)
         {
-            clazz.constantPoolEntryAccept(u2innerClassIndex, constantVisitor);
+            clazz.constantPoolEntryAccept(u2innerClassIndex,
+                                                 constantVisitor);
         }
     }
 
@@ -87,7 +88,8 @@ public class InnerClassesInfo implements VisitorAccepter
     {
         if (u2outerClassIndex != 0)
         {
-            clazz.constantPoolEntryAccept(u2outerClassIndex, constantVisitor);
+            clazz.constantPoolEntryAccept(u2outerClassIndex,
+                                                 constantVisitor);
         }
     }
 
@@ -100,7 +102,8 @@ public class InnerClassesInfo implements VisitorAccepter
     {
         if (u2innerNameIndex != 0)
         {
-            clazz.constantPoolEntryAccept(u2innerNameIndex, constantVisitor);
+            clazz.constantPoolEntryAccept(u2innerNameIndex,
+                                                 constantVisitor);
         }
     }
 

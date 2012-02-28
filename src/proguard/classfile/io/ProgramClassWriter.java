@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -57,7 +57,7 @@ implements   ClassVisitor,
 
 
     /**
-     * Creates a new ProgramClassWriter for writing to the given DataOutput.
+     * Creates a new ProgramClassWriter for reading from the given DataOutput.
      */
     public ProgramClassWriter(DataOutput dataOutput)
     {
@@ -208,20 +208,6 @@ implements   ClassVisitor,
         }
 
 
-        public void visitInvokeDynamicConstant(Clazz clazz, InvokeDynamicConstant invokeDynamicConstant)
-        {
-            dataOutput.writeShort(invokeDynamicConstant.u2bootstrapMethodAttributeIndex);
-            dataOutput.writeShort(invokeDynamicConstant.u2nameAndTypeIndex);
-        }
-
-
-        public void visitMethodHandleConstant(Clazz clazz, MethodHandleConstant methodHandleConstant)
-        {
-            dataOutput.writeByte(methodHandleConstant.u1referenceKind);
-            dataOutput.writeShort(methodHandleConstant.u2referenceIndex);
-        }
-
-
         public void visitAnyRefConstant(Clazz clazz, RefConstant refConstant)
         {
             dataOutput.writeShort(refConstant.u2classIndex);
@@ -232,12 +218,6 @@ implements   ClassVisitor,
         public void visitClassConstant(Clazz clazz, ClassConstant classConstant)
         {
             dataOutput.writeShort(classConstant.u2nameIndex);
-        }
-
-
-        public void visitMethodTypeConstant(Clazz clazz, MethodTypeConstant methodTypeConstant)
-        {
-            dataOutput.writeShort(methodTypeConstant.u2descriptorIndex);
         }
 
 
@@ -283,7 +263,6 @@ implements   ClassVisitor,
     private class AttributeBodyWriter
     extends       SimplifiedVisitor
     implements    AttributeVisitor,
-                  BootstrapMethodInfoVisitor,
                   InnerClassesInfoVisitor,
                   ExceptionInfoVisitor,
                   StackMapFrameVisitor,
@@ -300,15 +279,6 @@ implements   ClassVisitor,
         {
             // Write the unknown information.
             dataOutput.write(unknownAttribute.info);
-        }
-
-
-        public void visitBootstrapMethodsAttribute(Clazz clazz, BootstrapMethodsAttribute bootstrapMethodsAttribute)
-        {
-            // Write the bootstrap methods.
-            dataOutput.writeShort(bootstrapMethodsAttribute.u2bootstrapMethodsCount);
-
-            bootstrapMethodsAttribute.bootstrapMethodEntriesAccept(clazz, this);
         }
 
 
@@ -468,7 +438,8 @@ implements   ClassVisitor,
 
                 for (int index = 0; index < u2annotationsCount; index++)
                 {
-                    visitAnnotation(clazz, annotations[index]);
+                    Annotation annotation = annotations[index];
+                    this.visitAnnotation(clazz, annotation);
                 }
 
             }
@@ -479,22 +450,6 @@ implements   ClassVisitor,
         {
             // Write the default element value.
             annotationDefaultAttribute.defaultValue.accept(clazz, null, this);
-        }
-
-
-        // Implementations for BootstrapMethodInfoVisitor.
-
-        public void visitBootstrapMethodInfo(Clazz clazz, BootstrapMethodInfo bootstrapMethodInfo)
-        {
-            dataOutput.writeShort(bootstrapMethodInfo.u2methodHandleIndex);
-
-            // Write the bootstrap method arguments.
-            dataOutput.writeShort(bootstrapMethodInfo.u2methodArgumentCount);
-
-            for (int index = 0; index < bootstrapMethodInfo.u2methodArgumentCount; index++)
-            {
-                dataOutput.writeShort(bootstrapMethodInfo.u2methodArguments[index]);
-            }
         }
 
 

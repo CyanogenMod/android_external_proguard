@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -22,36 +22,18 @@ package proguard.optimize.info;
 
 import proguard.classfile.*;
 import proguard.classfile.util.SimplifiedVisitor;
-import proguard.classfile.visitor.*;
+import proguard.classfile.visitor.MemberVisitor;
 
 /**
- * This ClassVisitor marks all classes that contain package visible members.
+ * This MemberVisitor marks all classes that contain visited package visible
+ * members.
  *
  * @author Eric Lafortune
  */
 public class PackageVisibleMemberContainingClassMarker
 extends      SimplifiedVisitor
-implements   ClassVisitor,
-             MemberVisitor
+implements   MemberVisitor
 {
-    // Implementations for ClassVisitor.
-
-    public void visitAnyClass(Clazz clazz)
-    {
-        // Check the class itself.
-        if ((clazz.getAccessFlags() & ClassConstants.INTERNAL_ACC_PUBLIC) == 0)
-        {
-            setPackageVisibleMembers(clazz);
-        }
-        else
-        {
-            // Check the members.
-            clazz.fieldsAccept(this);
-            clazz.methodsAccept(this);
-        }
-    }
-
-
     // Implementations for MemberVisitor.
 
     public void visitAnyMember(Clazz clazz, Member member)

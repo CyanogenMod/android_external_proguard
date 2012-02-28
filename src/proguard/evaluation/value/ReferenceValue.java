@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -280,24 +280,10 @@ public class ReferenceValue extends Category1Value
                 thisReferencedClass.hierarchyAccept(false, true, true, false,
                                                     new ClassCollector(thisSuperClasses));
 
-                int thisSuperClassesCount = thisSuperClasses.size();
-                if (thisSuperClassesCount == 0 &&
-                    thisReferencedClass.getSuperName() != null)
-                {
-                    throw new IllegalArgumentException("Can't find any super classes of ["+thisType+"] (not even immediate super class ["+thisReferencedClass.getSuperName()+"])");
-                }
-
                 // Collect the superclasses and interfaces of the other class.
                 Set otherSuperClasses = new HashSet();
                 otherReferencedClass.hierarchyAccept(false, true, true, false,
                                                      new ClassCollector(otherSuperClasses));
-
-                int otherSuperClassesCount = otherSuperClasses.size();
-                if (otherSuperClassesCount == 0 &&
-                    otherReferencedClass.getSuperName() != null)
-                {
-                    throw new IllegalArgumentException("Can't find any super classes of ["+otherType+"] (not even immediate super class ["+otherReferencedClass.getSuperName()+"])");
-                }
 
                 if (DEBUG)
                 {
@@ -316,7 +302,7 @@ public class ReferenceValue extends Category1Value
 
                 // Find a class that is a subclass of all common superclasses,
                 // or that at least has the maximum number of common superclasses.
-                Clazz commonClass = null;
+                Clazz commonClazz = null;
 
                 int maximumSuperClassCount = -1;
 
@@ -331,33 +317,31 @@ public class ReferenceValue extends Category1Value
                     int superClassCount = superClassCount(commonSuperClass, thisSuperClasses);
                     if (maximumSuperClassCount < superClassCount ||
                         (maximumSuperClassCount == superClassCount &&
-                         commonClass != null                       &&
-                         commonClass.getName().compareTo(commonSuperClass.getName()) > 0))
+                         commonClazz != null                       &&
+                         commonClazz.getName().compareTo(commonSuperClass.getName()) > 0))
                     {
-                        commonClass            = commonSuperClass;
+                        commonClazz            = commonSuperClass;
                         maximumSuperClassCount = superClassCount;
                     }
                 }
 
-                if (commonClass == null)
+                if (commonClazz == null)
                 {
-                    throw new IllegalArgumentException("Can't find common super class of ["+
-                                                       thisType +"] (with "+thisSuperClassesCount +" known super classes) and ["+
-                                                       otherType+"] (with "+otherSuperClassesCount+" known super classes)");
+                    throw new IllegalArgumentException("Can't find common super class of ["+thisType+"] and ["+otherType+"]");
                 }
 
                 if (DEBUG)
                 {
-                    System.out.println("  Best common class: ["+commonClass.getName()+"]");
+                    System.out.println("  Best common class: ["+commonClazz.getName()+"]");
                 }
 
                 // TODO: Handle more difficult cases, with multiple global subclasses.
 
                 return new ReferenceValue(commonDimensionCount == 0 ?
-                                              commonClass.getName() :
-                                              ClassUtil.internalArrayTypeFromClassName(commonClass.getName(),
+                                              commonClazz.getName() :
+                                              ClassUtil.internalArrayTypeFromClassName(commonClazz.getName(),
                                                                                        commonDimensionCount),
-                                          commonClass,
+                                          commonClazz,
                                           mayBeNull);
             }
         }
@@ -417,6 +401,8 @@ public class ReferenceValue extends Category1Value
                 count++;
             }
         }
+
+        //System.out.println("ReferenceValue.superClassCount: ["+subClass.getName()+"]: "+count);
 
         return count;
     }

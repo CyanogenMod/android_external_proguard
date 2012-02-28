@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -26,16 +26,14 @@ import proguard.classfile.visitor.*;
 import java.util.*;
 
 /**
- * This is a set of representations of classes. They can be enumerated or
+ * This is a set of representations of classes. They      can be enumerated or
  * retrieved by name. They can also be accessed by means of class visitors.
  *
  * @author Eric Lafortune
  */
 public class ClassPool
 {
-    // We're using a sorted tree map instead of a hash map to store the classes,
-    // in order to make the processing more deterministic.
-    private final Map classes = new TreeMap();
+    private final Map classes = new HashMap();
 
 
     /**
@@ -68,11 +66,11 @@ public class ClassPool
     /**
      * Returns a Clazz from the class pool based on its name. Returns
      * <code>null</code> if the class with the given name is not in the class
-     * pool.
+     * pool. Returns the base class if the class name is an array type.
      */
     public Clazz getClass(String className)
     {
-        return (Clazz)classes.get(className);
+        return (Clazz)classes.get(ClassUtil.internalClassNameFromClassType(className));
     }
 
 
@@ -124,11 +122,8 @@ public class ClassPool
      */
     public void classesAcceptAlphabetically(ClassVisitor classVisitor)
     {
-        // We're already using a tree map.
-        //TreeMap sortedClasses = new TreeMap(classes);
-        //Iterator iterator = sortedClasses.values().iterator();
-
-        Iterator iterator = classes.values().iterator();
+        TreeMap sortedClasses = new TreeMap(classes);
+        Iterator iterator = sortedClasses.values().iterator();
         while (iterator.hasNext())
         {
             Clazz clazz = (Clazz)iterator.next();

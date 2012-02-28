@@ -34,22 +34,9 @@ pre {
   background: #E0E0E0;
 }
 
-ul.spacious li
-{
-  padding: 8px;
-}
-
 a
 {
   text-decoration: none;
-}
-
-a.button {
-  color: #000000;
-  text-decoration: none;
-  background: #E0E0E0;
-  border: 1px outset #FFFFFF;
-  float: right;
 }
 
 /* Settings for variable width code. */
@@ -76,7 +63,7 @@ td.transparentblock {
 td.whiteblock {
   width: 100px;
   text-align: center;
-  border: 1px solid #C0C0C0;
+  border: solid #C0C0C0 1px;
   background: #E0E0E0;
   padding: 10px 0px;
 }
@@ -84,7 +71,7 @@ td.whiteblock {
 td.lightblock {
   width: 100px;
   text-align: center;
-  border: 1px solid #8888FF;
+  border: solid #8888FF 1px;
   background: #BBBBFF;
   padding: 20px 0px;
 }
@@ -100,6 +87,6 @@ td.darkblock {
 
 td.button {
   background: #E0E0E0;
-  border: 1px outset #FFFFFF;
+  border: outset #FFFFFF 1px;
   font-weight: bold;
 }

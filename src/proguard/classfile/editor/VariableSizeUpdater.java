@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2011 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -29,8 +29,7 @@ import proguard.classfile.util.*;
 
 /**
  * This AttributeVisitor computes and updates the maximum local variable frame
- * size of the code attributes that it visits. It also cleans up the local
- * variable tables.
+ * size of the code attributes that it visits.
  *
  * @author Eric Lafortune
  */
@@ -44,9 +43,6 @@ implements   AttributeVisitor,
     /*/
     private static       boolean DEBUG = true;
     //*/
-
-
-    private VariableCleaner variableCleaner = new VariableCleaner();
 
 
     // Implementations for AttributeVisitor.
@@ -73,9 +69,6 @@ implements   AttributeVisitor,
 
         // Go over all instructions.
         codeAttribute.instructionsAccept(clazz, method, this);
-
-        // Remove the unused variables of the attributes.
-        variableCleaner.visitCodeAttribute(clazz, method, codeAttribute);
     }
 
 
@@ -98,7 +91,7 @@ implements   AttributeVisitor,
 
             if (DEBUG)
             {
-                System.out.println("  Max locals: "+codeAttribute.u2maxLocals+" <- "+variableInstruction.toString(offset));
+                System.out.println("Max locals: "+codeAttribute.u2maxLocals+" <- "+variableInstruction.toString(offset));
             }
         }
     }
