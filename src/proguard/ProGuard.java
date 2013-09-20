@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -24,11 +24,12 @@ import proguard.classfile.ClassPool;
 import proguard.classfile.editor.ClassElementSorter;
 import proguard.classfile.visitor.*;
 import proguard.obfuscate.Obfuscator;
-import proguard.optimize.Optimizer;
+import proguard.optimize.*;
 import proguard.preverify.*;
 import proguard.shrink.Shrinker;
 
 import java.io.*;
+import java.util.Properties;
 
 /**
  * Tool for shrinking, optimizing, obfuscating, and preverifying Java classes.
@@ -37,7 +38,7 @@ import java.io.*;
  */
 public class ProGuard
 {
-    public static final String VERSION = "ProGuard, version 4.4";
+    public static final String VERSION = "ProGuard, version 4.10";
 
     private final Configuration configuration;
     private       ClassPool     programClassPool = new ClassPool();
@@ -77,7 +78,8 @@ public class ProGuard
 
         readInput();
 
-        if (configuration.shrink    ||
+        if (configuration.printSeeds != null ||
+            configuration.shrink    ||
             configuration.optimize  ||
             configuration.obfuscate ||
             configuration.preverify)
@@ -236,30 +238,10 @@ public class ProGuard
             System.out.println("Printing kept classes, fields, and methods...");
         }
 
-        // Check if we have at least some keep commands.
-        if (configuration.keep == null)
-        {
-            throw new IOException("You have to specify '-keep' options for the shrinking step.");
-        }
-
         PrintStream ps = createPrintStream(configuration.printSeeds);
         try
         {
-            // Create a visitor for printing out the seeds. We're  printing out
-            // the program elements that are preserved against shrinking,
-            // optimization, or obfuscation.
-            SimpleClassPrinter printer = new SimpleClassPrinter(false, ps);
-            ClassPoolVisitor classPoolvisitor =
-                ClassSpecificationVisitorFactory.createClassPoolVisitor(configuration.keep,
-                                                                        new ProgramClassFilter(printer),
-                                                                        new ProgramMemberFilter(printer),
-                                                                        true,
-                                                                        true,
-                                                                        true);
-
-            // Print out the seeds.
-            programClassPool.accept(classPoolvisitor);
-            libraryClassPool.accept(classPoolvisitor);
+            new SeedPrinter(ps).write(configuration, programClassPool, libraryClassPool);
         }
         finally
         {
@@ -421,9 +403,10 @@ public class ProGuard
     private PrintStream createPrintStream(File file)
     throws FileNotFoundException
     {
-        return isFile(file) ?
-            new PrintStream(new BufferedOutputStream(new FileOutputStream(file))) :
-            System.out;
+        return file == Configuration.STD_OUT ? System.out :
+            new PrintStream(
+            new BufferedOutputStream(
+            new FileOutputStream(file)));
     }
 
 
@@ -445,24 +428,26 @@ public class ProGuard
 
 
     /**
-     * Returns the absolute file name for the given file, or the standard output
+     * Returns the canonical file name for the given file, or "standard output"
      * if the file name is empty.
      */
     private String fileName(File file)
     {
-        return isFile(file) ?
-            file.getAbsolutePath() :
-            "standard output";
-    }
-
-
-    /**
-     * Returns whether the given file is actually a file, or just a placeholder
-     * for the standard output.
-     */
-    private boolean isFile(File file)
-    {
-        return file.getPath().length() > 0;
+        if (file == Configuration.STD_OUT)
+        {
+            return "standard output";
+        }
+        else
+        {
+            try
+            {
+                return file.getCanonicalPath();
+            }
+            catch (IOException ex)
+            {
+                return file.getPath();
+            }
+        }
     }
 
 
@@ -484,8 +469,8 @@ public class ProGuard
         try
         {
             // Parse the options specified in the command line arguments.
-            ConfigurationParser parser = new ConfigurationParser(args);
-
+            ConfigurationParser parser = new ConfigurationParser(args,
+                                                                 System.getProperties());
             try
             {
                 parser.parse(configuration);

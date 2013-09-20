@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -34,6 +34,8 @@ import proguard.evaluation.*;
 import proguard.evaluation.value.*;
 import proguard.optimize.info.*;
 
+import java.util.Arrays;
+
 /**
  * This AttributeVisitor simplifies the code attributes that it visits, based
  * on partial evaluation.
@@ -52,21 +54,55 @@ implements   AttributeVisitor
     private static boolean DEBUG          = true;
     //*/
 
+    private static final int UNSUPPORTED      = -1;
+    private static final int NOP              = InstructionConstants.OP_NOP     & 0xff;
+    private static final int POP              = InstructionConstants.OP_POP     & 0xff;
+    private static final int POP2             = InstructionConstants.OP_POP2    & 0xff;
+    private static final int DUP              = InstructionConstants.OP_DUP     & 0xff;
+    private static final int DUP_X1           = InstructionConstants.OP_DUP_X1  & 0xff;
+    private static final int DUP_X2           = InstructionConstants.OP_DUP_X2  & 0xff;
+    private static final int DUP2             = InstructionConstants.OP_DUP2    & 0xff;
+    private static final int DUP2_X1          = InstructionConstants.OP_DUP2_X1 & 0xff;
+    private static final int DUP2_X2          = InstructionConstants.OP_DUP2_X2 & 0xff;
+    private static final int SWAP             = InstructionConstants.OP_SWAP    & 0xff;
+    private static final int MOV_X2           = DUP_X2  | (POP    << 8);
+    private static final int MOV2_X1          = DUP2_X1 | (POP2   << 8);
+    private static final int MOV2_X2          = DUP2_X2 | (POP2   << 8);
+    private static final int POP_X1           = SWAP    | (POP    << 8);
+    private static final int POP_X2           = DUP2_X1 | (POP2   << 8) | (POP    << 16);
+    private static final int POP_X3           = UNSUPPORTED;
+    private static final int POP2_X1          = DUP_X2  | (POP    << 8) | (POP2   << 16);
+    private static final int POP2_X2          = DUP2_X2 | (POP2   << 8) | (POP2   << 16);
+    private static final int POP3             = POP2    | (POP    << 8);
+    private static final int POP4             = POP2    | (POP2   << 8);
+    private static final int POP_DUP          = POP     | (DUP    << 8);
+    private static final int POP_SWAP_POP     = POP     | (SWAP   << 8) | (POP    << 16);
+    private static final int POP2_SWAP_POP    = POP2    | (SWAP   << 8) | (POP    << 16);
+    private static final int SWAP_DUP_X1      = SWAP    | (DUP_X1 << 8);
+    private static final int SWAP_DUP_X1_SWAP = SWAP    | (DUP_X1 << 8) | (SWAP   << 16);
+    private static final int SWAP_POP_DUP     = SWAP    | (POP    << 8) | (DUP    << 16);
+    private static final int SWAP_POP_DUP_X1  = SWAP    | (POP    << 8) | (DUP_X1 << 16);
+    private static final int DUP_X2_POP2      = DUP_X2  | (POP2   << 8);
+    private static final int DUP2_X1_POP3     = DUP2_X1 | (POP2   << 8) | (POP    << 16);
+    private static final int DUP2_X2_POP3     = DUP2_X2 | (POP2   << 8) | (POP    << 16);
+    private static final int DUP2_X2_SWAP_POP = DUP2_X2 | (SWAP   << 8) | (POP    << 16);
+
+
     private final InstructionVisitor extraDeletedInstructionVisitor;
     private final InstructionVisitor extraAddedInstructionVisitor;
 
-    private final PartialEvaluator             partialEvaluator;
-    private final PartialEvaluator             simplePartialEvaluator       = new PartialEvaluator();
-    private final SideEffectInstructionChecker sideEffectInstructionChecker = new SideEffectInstructionChecker(true);
-    private final MyUnusedParameterSimplifier  unusedParameterSimplifier    = new MyUnusedParameterSimplifier();
-    private final MyProducerMarker             producerMarker               = new MyProducerMarker();
-    private final MyStackConsistencyFixer      stackConsistencyFixer        = new MyStackConsistencyFixer();
-    private final CodeAttributeEditor          codeAttributeEditor          = new CodeAttributeEditor(false);
+    private final PartialEvaluator               partialEvaluator;
+    private final PartialEvaluator               simplePartialEvaluator       = new PartialEvaluator();
+    private final SideEffectInstructionChecker   sideEffectInstructionChecker = new SideEffectInstructionChecker(true, true);
+    private final MyUnusedParameterSimplifier    unusedParameterSimplifier    = new MyUnusedParameterSimplifier();
+    private final MyProducerMarker               producerMarker               = new MyProducerMarker();
+    private final MyVariableInitializationMarker variableInitializationMarker = new MyVariableInitializationMarker();
+    private final MyStackConsistencyFixer        stackConsistencyFixer        = new MyStackConsistencyFixer();
+    private final CodeAttributeEditor            codeAttributeEditor          = new CodeAttributeEditor(false, false);
 
-    private boolean[][] variablesNecessaryAfter = new boolean[ClassConstants.TYPICAL_CODE_LENGTH][ClassConstants.TYPICAL_VARIABLES_SIZE];
-    private boolean[][] stacksNecessaryAfter    = new boolean[ClassConstants.TYPICAL_CODE_LENGTH][ClassConstants.TYPICAL_STACK_SIZE];
-    private boolean[][] stacksSimplifiedBefore  = new boolean[ClassConstants.TYPICAL_CODE_LENGTH][ClassConstants.TYPICAL_STACK_SIZE];
-    private boolean[]   instructionsNecessary   = new boolean[ClassConstants.TYPICAL_CODE_LENGTH];
+    private boolean[][] stacksNecessaryAfter   = new boolean[ClassConstants.TYPICAL_CODE_LENGTH][ClassConstants.TYPICAL_STACK_SIZE];
+    private boolean[][] stacksSimplifiedBefore = new boolean[ClassConstants.TYPICAL_CODE_LENGTH][ClassConstants.TYPICAL_STACK_SIZE];
+    private boolean[]   instructionsNecessary  = new boolean[ClassConstants.TYPICAL_CODE_LENGTH];
 
     private int maxMarkedOffset;
 
@@ -153,6 +189,9 @@ implements   AttributeVisitor
 
         // Evaluate the method.
         partialEvaluator.visitCodeAttribute(clazz, method, codeAttribute);
+
+        // Evaluate the method the way the JVM verifier would do it.
+        simplePartialEvaluator.visitCodeAttribute(clazz, method, codeAttribute);
 
         int codeLength = codeAttribute.u4codeLength;
 
@@ -272,22 +311,13 @@ implements   AttributeVisitor
 
         for (int offset = 0; offset < codeLength; offset++)
         {
-            // Is it a variable initialization that hasn't been marked yet?
-            if (partialEvaluator.isTraced(offset) &&
-                !isInstructionNecessary(offset))
+            if (isInstructionNecessary(offset))
             {
-                // Is the corresponding variable necessary anywhere in the code,
-                // accoriding to a simple partial evaluation?
-                int variableIndex = partialEvaluator.initializedVariable(offset);
-                if (variableIndex >= 0 &&
-                    isVariableInitializationNecessary(clazz,
-                                                      method,
-                                                      codeAttribute,
-                                                      offset,
-                                                      variableIndex))
-                {
-                    markInstruction(offset);
-                }
+                // Mark initializations of the required instruction.
+                Instruction instruction = InstructionFactory.create(codeAttribute.code,
+                                                                    offset);
+
+                instruction.accept(clazz, method, codeAttribute, offset, variableInitializationMarker);
             }
         }
         if (DEBUG) System.out.println();
@@ -383,11 +413,8 @@ implements   AttributeVisitor
                                                                 offset);
             if (!isInstructionNecessary(offset))
             {
+                codeAttributeEditor.clearModifications(offset);
                 codeAttributeEditor.deleteInstruction(offset);
-
-                codeAttributeEditor.insertBeforeInstruction(offset, (Instruction)null);
-                codeAttributeEditor.replaceInstruction(offset,      (Instruction)null);
-                codeAttributeEditor.insertAfterInstruction(offset,  (Instruction)null);
 
                 // Visit the instruction, if required.
                 if (extraDeletedInstructionVisitor != null)
@@ -467,7 +494,9 @@ implements   AttributeVisitor
      */
     private class MyUnusedParameterSimplifier
     extends       SimplifiedVisitor
-    implements    InstructionVisitor, ConstantVisitor, MemberVisitor
+    implements    InstructionVisitor,
+                  ConstantVisitor,
+                  MemberVisitor
     {
         private int                 invocationOffset;
         private ConstantInstruction invocationInstruction;
@@ -614,8 +643,8 @@ implements   AttributeVisitor
 
         public void visitVariableInstruction(Clazz clazz, Method method, CodeAttribute codeAttribute, int offset, VariableInstruction variableInstruction)
         {
-            // Is the variable being loaded (or incremented)?
-            if (variableInstruction.opcode < InstructionConstants.OP_ISTORE)
+            // Is the variable being loaded or incremented?
+            if (variableInstruction.isLoad())
             {
                 markVariableProducers(offset, variableInstruction.variableIndex);
             }
@@ -657,6 +686,32 @@ implements   AttributeVisitor
 
 
     /**
+     * This InstructionVisitor marks variable initializations that are
+     * necessary to appease the JVM.
+     */
+    private class MyVariableInitializationMarker
+    extends       SimplifiedVisitor
+    implements    InstructionVisitor
+    {
+        // Implementations for InstructionVisitor.
+
+        public void visitAnyInstruction(Clazz clazz, Method method, CodeAttribute codeAttribute, int offset, Instruction instruction) {}
+
+
+        public void visitVariableInstruction(Clazz clazz, Method method, CodeAttribute codeAttribute, int offset, VariableInstruction variableInstruction)
+        {
+            // Is the variable being loaded or incremented?
+            if (variableInstruction.isLoad())
+            {
+                // Mark any variable initializations for this variable load that
+                // are required according to the JVM.
+                markVariableInitializers(offset, variableInstruction.variableIndex);
+            }
+        }
+    }
+
+
+    /**
      * This InstructionVisitor fixes instructions locally, popping any unused
      * produced stack entries after marked instructions, and popping produced
      * stack entries and pushing missing stack entries instead of unmarked
@@ -682,17 +737,25 @@ implements   AttributeVisitor
                     TracedStack tracedStack =
                         partialEvaluator.getStackBefore(offset);
 
-                    int top = tracedStack.size() - 1;
+                    int stackSize = tracedStack.size();
 
                     int requiredPushCount = 0;
-                    for (int stackIndex = 0; stackIndex < popCount; stackIndex++)
+                    for (int stackIndex = stackSize - popCount; stackIndex < stackSize; stackIndex++)
                     {
-                        // Is the stack entry required by other consumers?
-                        if (!isStackSimplifiedBefore(offset, top - stackIndex) &&
-                            !isAnyStackEntryNecessaryAfter(tracedStack.getTopProducerValue(stackIndex).instructionOffsetValue(), top - stackIndex))
+                        if (!isStackSimplifiedBefore(offset, stackIndex))
                         {
-                            // Remember to push it.
-                            requiredPushCount++;
+                            // Is this stack entry pushed by any producer
+                            // (because it is required by other consumers)?
+                            if (isStackEntryPresentBefore(offset, stackIndex))
+                            {
+                                // Mark all produced stack entries.
+                                markStackEntryProducers(offset, stackIndex);
+                            }
+                            else
+                            {
+                                // Remember to push it.
+                                requiredPushCount++;
+                            }
                         }
                     }
 
@@ -703,10 +766,36 @@ implements   AttributeVisitor
 
                         if (requiredPushCount > (instruction.isCategory2() ? 2 : 1))
                         {
-                            throw new IllegalArgumentException("Unsupported stack size increment ["+requiredPushCount+"]");
+                            throw new IllegalArgumentException("Unsupported stack size increment ["+requiredPushCount+"] at ["+offset+"]");
                         }
 
                         insertPushInstructions(offset, false, tracedStack.getTop(0).computationalType());
+                    }
+                }
+
+                // Check all other stack entries, if this is a return
+                // instruction.
+                // Typical case: the code returns, but there are still other
+                // entries left on the stack. These have to be consistent.
+                InstructionOffsetValue branchTargets =
+                    partialEvaluator.branchTargets(offset);
+                if (branchTargets != null &&
+                    branchTargets.instructionOffsetCount() == 0)
+                {
+                    TracedStack tracedStack =
+                        partialEvaluator.getStackBefore(offset);
+
+                    int unpoppedStackSize = tracedStack.size() - popCount;
+
+                    for (int stackIndex = 0; stackIndex < unpoppedStackSize; stackIndex++)
+                    {
+                        // Is this stack entry pushed by any producer
+                        // (because it is required by other consumers)?
+                        if (isStackEntryPresentBefore(offset, stackIndex))
+                        {
+                            // Mark all produced stack entries.
+                            markStackEntryProducers(offset, stackIndex);
+                        }
                     }
                 }
 
@@ -719,13 +808,13 @@ implements   AttributeVisitor
                     TracedStack tracedStack =
                         partialEvaluator.getStackAfter(offset);
 
-                    int top = tracedStack.size() - 1;
+                    int stackSize = tracedStack.size();
 
                     int requiredPopCount = 0;
-                    for (int stackIndex = 0; stackIndex < pushCount; stackIndex++)
+                    for (int stackIndex = stackSize - pushCount; stackIndex < stackSize; stackIndex++)
                     {
                         // Is the stack entry required by consumers?
-                        if (!isStackEntryNecessaryAfter(offset, top - stackIndex))
+                        if (!isStackEntryNecessaryAfter(offset, stackIndex))
                         {
                             // Remember to pop it.
                             requiredPopCount++;
@@ -752,14 +841,18 @@ implements   AttributeVisitor
                     TracedStack tracedStack =
                         partialEvaluator.getStackBefore(offset);
 
-                    int top = tracedStack.size() - 1;
+                    int stackSize = tracedStack.size();
 
                     int expectedPopCount = 0;
-                    for (int stackIndex = 0; stackIndex < popCount; stackIndex++)
+                    for (int stackIndex = stackSize - popCount; stackIndex < stackSize; stackIndex++)
                     {
-                        // Is the stack entry required by other consumers?
-                        if (isAnyStackEntryNecessaryAfter(tracedStack.getTopProducerValue(stackIndex).instructionOffsetValue(), top - stackIndex))
+                        // Is this stack entry pushed by any producer
+                        // (because it is required by other consumers)?
+                        if (isStackEntryPresentBefore(offset, stackIndex))
                         {
+                            // Mark all produced stack entries.
+                            markStackEntryProducers(offset, stackIndex);
+
                             // Remember to pop it.
                             expectedPopCount++;
                         }
@@ -782,13 +875,13 @@ implements   AttributeVisitor
                     TracedStack tracedStack =
                         partialEvaluator.getStackAfter(offset);
 
-                    int top = tracedStack.size() - 1;
+                    int stackSize = tracedStack.size();
 
                     int expectedPushCount = 0;
-                    for (int stackIndex = 0; stackIndex < pushCount; stackIndex++)
+                    for (int stackIndex = stackSize - pushCount; stackIndex < stackSize; stackIndex++)
                     {
                         // Is the stack entry required by consumers?
-                        if (isStackEntryNecessaryAfter(offset, top - stackIndex))
+                        if (isStackEntryNecessaryAfter(offset, stackIndex))
                         {
                             // Remember to push it.
                             expectedPushCount++;
@@ -812,12 +905,501 @@ implements   AttributeVisitor
             if (isInstructionNecessary(offset) &&
                 isDupOrSwap(simpleInstruction))
             {
-                fixDupInstruction(clazz, codeAttribute, offset, simpleInstruction);
+                int stackSizeBefore = partialEvaluator.getStackBefore(offset).size();
+
+                // Check all stack entries that are popped.
+                // Typical case: a freshly marked variable initialization that
+                // requires some value on the stack.
+                int popCount = simpleInstruction.stackPopCount(clazz);
+                if (popCount > 0)
+                {
+                    for (int stackIndex = stackSizeBefore - popCount; stackIndex < stackSizeBefore; stackIndex++)
+                    {
+                        // Is this stack entry pushed by any producer
+                        // (because it is required by other consumers)?
+                        if (isStackEntryPresentBefore(offset, stackIndex))
+                        {
+                            // Mark all produced stack entries.
+                            markStackEntryProducers(offset, stackIndex);
+                        }
+                    }
+                }
+
+                int topBefore = stackSizeBefore - 1;
+                int topAfter  = partialEvaluator.getStackAfter(offset).size() - 1;
+
+                byte oldOpcode = simpleInstruction.opcode;
+
+                // Simplify the dup/swap instruction if possible.
+                int newOpcodes = fixDupSwap(offset, oldOpcode, topBefore, topAfter);
+
+                // Did we find a suitabe (extended) opcode?
+                if (newOpcodes == UNSUPPORTED)
+                {
+                    // We can't easily emulate some constructs.
+                    throw new UnsupportedOperationException("Can't handle "+simpleInstruction.toString()+" instruction at ["+offset +"]");
+                }
+
+                // Is there a single replacement opcode?
+                if ((newOpcodes & ~0xff) == 0)
+                {
+                    byte newOpcode = (byte)newOpcodes;
+
+                    if      (newOpcode == InstructionConstants.OP_NOP)
+                    {
+                        // Delete the instruction.
+                        codeAttributeEditor.deleteInstruction(offset);
+
+                        if (extraDeletedInstructionVisitor != null)
+                        {
+                            extraDeletedInstructionVisitor.visitSimpleInstruction(null, null, null, offset, null);
+                        }
+
+                        if (DEBUG) System.out.println("  Deleting marked instruction "+simpleInstruction.toString(offset));
+                    }
+                    else if (newOpcode == oldOpcode)
+                    {
+                        // Leave the instruction unchanged.
+                        codeAttributeEditor.undeleteInstruction(offset);
+
+                        if (DEBUG) System.out.println("  Marking unchanged instruction "+simpleInstruction.toString(offset));
+                    }
+                    else
+                    {
+                        // Replace the instruction.
+                        Instruction replacementInstruction = new SimpleInstruction(newOpcode);
+                        codeAttributeEditor.replaceInstruction(offset,
+                                                               replacementInstruction);
+
+                        if (DEBUG) System.out.println("  Replacing instruction "+simpleInstruction.toString(offset)+" by "+replacementInstruction.toString());
+                    }
+                }
+                else
+                {
+                    // Collect the replacement instructions.
+                    Instruction[] replacementInstructions = new Instruction[4];
+
+                    if (DEBUG) System.out.println("  Replacing instruction "+simpleInstruction.toString(offset)+" by");
+                    int count = 0;
+                    while (newOpcodes != 0)
+                    {
+                        SimpleInstruction replacementInstruction = new SimpleInstruction((byte)newOpcodes);
+                        replacementInstructions[count++] = replacementInstruction;
+
+                        if (DEBUG) System.out.println("    "+replacementInstruction.toString());
+                        newOpcodes >>>= 8;
+                    }
+
+                    // Create a properly sized array.
+                    if (count < 4)
+                    {
+                        Instruction[] newInstructions = new Instruction[count];
+                        System.arraycopy(replacementInstructions, 0, newInstructions, 0, count);
+                        replacementInstructions = newInstructions;
+                    }
+
+                    codeAttributeEditor.replaceInstruction(offset,
+                                                           replacementInstructions);
+                }
             }
             else
             {
                 visitAnyInstruction(clazz, method, codeAttribute, offset, simpleInstruction);
             }
+        }
+
+
+        /**
+         * Returns a dup/swap opcode that is corrected for the stack entries
+         * that are present before the instruction and necessary after the
+         * instruction. The returned integer opcode may contain multiple byte
+         * opcodes (least significant byte first).
+         * @param instructionOffset the offset of the dup/swap instruction.
+         * @param dupSwapOpcode     the original dup/swap opcode.
+         * @param topBefore         the index of the top stack entry before
+         *                          the instruction (counting from the bottom).
+         * @param topAfter          the index of the top stack entry after
+         *                          the instruction (counting from the bottom).
+         * @return the corrected opcode.
+         */
+        private int fixDupSwap(int  instructionOffset,
+                               byte dupSwapOpcode,
+                               int  topBefore,
+                               int  topAfter)
+        {
+            switch (dupSwapOpcode)
+            {
+                case InstructionConstants.OP_DUP:     return fixedDup    (instructionOffset, topBefore, topAfter);
+                case InstructionConstants.OP_DUP_X1:  return fixedDup_x1 (instructionOffset, topBefore, topAfter);
+                case InstructionConstants.OP_DUP_X2:  return fixedDup_x2 (instructionOffset, topBefore, topAfter);
+                case InstructionConstants.OP_DUP2:    return fixedDup2   (instructionOffset, topBefore, topAfter);
+                case InstructionConstants.OP_DUP2_X1: return fixedDup2_x1(instructionOffset, topBefore, topAfter);
+                case InstructionConstants.OP_DUP2_X2: return fixedDup2_x2(instructionOffset, topBefore, topAfter);
+                case InstructionConstants.OP_SWAP:    return fixedSwap   (instructionOffset, topBefore, topAfter);
+                default: throw new IllegalArgumentException("Not a dup/swap opcode ["+dupSwapOpcode+"]");
+            }
+        }
+
+
+        private int fixedDup(int instructionOffset, int topBefore, int topAfter)
+        {
+            boolean stackEntryPresent0 = isStackEntryPresentBefore(instructionOffset, topBefore - 0);
+
+            boolean stackEntryNecessary0 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 0);
+            boolean stackEntryNecessary1 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 1);
+
+            // Figure out which stack entries should be moved,
+            // copied, or removed.
+            return
+                stackEntryNecessary0 ?
+                    stackEntryNecessary1 ? DUP : // ...O -> ...OO
+                                           NOP : // ...O -> ...O
+                stackEntryNecessary1     ? NOP : // ...O -> ...O
+                stackEntryPresent0       ? POP : // ...O -> ...
+                                           NOP;  // ...  -> ...
+        }
+
+
+        private int fixedDup_x1(int instructionOffset, int topBefore, int topAfter)
+        {
+            boolean stackEntryPresent0 = isStackEntryPresentBefore(instructionOffset, topBefore - 0);
+            boolean stackEntryPresent1 = isStackEntryPresentBefore(instructionOffset, topBefore - 1);
+
+            boolean stackEntryNecessary0 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 0);
+            boolean stackEntryNecessary1 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 1);
+            boolean stackEntryNecessary2 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 2);
+
+            // Figure out which stack entries should be moved,
+            // copied, or removed.
+            return
+                stackEntryNecessary1 ?
+                    stackEntryNecessary2 ?
+                        stackEntryNecessary0 ? DUP_X1       : // ...XO -> ...OXO
+                                               SWAP         : // ...XO -> ...OX
+                    // !stackEntryNecessary2
+                        stackEntryNecessary0 ? NOP          : // ...XO -> ...XO
+                        stackEntryPresent0   ? POP          : // ...XO -> ...X
+                                               NOP          : // ...X  -> ...X
+                stackEntryPresent1 ?
+                    stackEntryNecessary2 ?
+                        stackEntryNecessary0 ? SWAP_POP_DUP : // ...XO -> ...OO
+                                               POP_X1       : // ...XO -> ...O
+                    // !stackEntryNecessary2
+                        stackEntryNecessary0 ? POP_X1       : // ...XO -> ...O
+                        stackEntryPresent0   ? POP2         : // ...XO -> ...
+                                               POP          : // ...X  -> ...
+                // !stackEntryPresent1
+                    stackEntryNecessary2 ?
+                        stackEntryNecessary0 ? DUP          : // ...O -> ...OO
+                                               NOP          : // ...O -> ...O
+                    // !stackEntryNecessary2
+                        stackEntryNecessary0 ? NOP          : // ...O -> ...O
+                        stackEntryPresent0   ? POP          : // ...O -> ...
+                                               NOP;           // ...  -> ...
+        }
+
+
+        private int fixedDup_x2(int instructionOffset, int topBefore, int topAfter)
+        {
+            boolean stackEntryPresent0 = isStackEntryPresentBefore(instructionOffset, topBefore - 0);
+            boolean stackEntryPresent1 = isStackEntryPresentBefore(instructionOffset, topBefore - 1);
+            boolean stackEntryPresent2 = isStackEntryPresentBefore(instructionOffset, topBefore - 2);
+
+            boolean stackEntryNecessary0 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 0);
+            boolean stackEntryNecessary1 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 1);
+            boolean stackEntryNecessary2 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 2);
+            boolean stackEntryNecessary3 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 3);
+
+            // Figure out which stack entries should be moved,
+            // copied, or removed.
+            return
+                stackEntryNecessary1 ?
+                    stackEntryNecessary2 ?
+                        stackEntryNecessary3 ?
+                            stackEntryNecessary0 ? DUP_X2          : // ...XYO -> ...OXYO
+                                                   MOV_X2          : // ...XYO -> ...OXY
+                        // !stackEntryNecessary3
+                            stackEntryNecessary0 ? NOP             : // ...XYO -> ...XYO
+                            stackEntryPresent0   ? POP             : // ...XYO -> ...XY
+                                                   NOP             : // ...XY  -> ...XY
+                    stackEntryPresent2 ?
+                        stackEntryNecessary3 ?
+                        //  stackEntryNecessary0 ? UNSUPPORTED     : // ...XYO -> ...OYO
+                                                   UNSUPPORTED     : // ...XYO -> ...OY
+                        // !stackEntryNecessary3
+                            stackEntryNecessary0 ? POP_X2          : // ...XYO -> ...YO
+                            stackEntryPresent0   ? POP_SWAP_POP    : // ...XYO -> ...Y
+                                                   POP_X1          : // ...XY  -> ...Y
+                    // !stackEntryPresent2
+                        stackEntryNecessary3 ?
+                            stackEntryNecessary0 ? DUP_X1          : // ...YO -> ...OYO
+                                                   SWAP            : // ...YO -> ...OY
+                        // !stackEntryNecessary3
+                            stackEntryNecessary0 ? NOP             : // ...YO -> ...YO
+                            stackEntryPresent0   ? POP             : // ...YO -> ...Y
+                                                   NOP             : // ...Y  -> ...Y
+                stackEntryPresent1 ?
+                    stackEntryNecessary2 ?
+                        stackEntryNecessary3 ?
+                            stackEntryNecessary0 ? SWAP_POP_DUP_X1 : // ...XYO -> ...OXO
+                                                   DUP_X2_POP2     : // ...XYO -> ...OX
+                        // !stackEntryNecessary3
+                            stackEntryNecessary0 ? POP_X1          : // ...XYO -> ...XO
+                            stackEntryPresent0   ? POP2            : // ...XYO -> ...X
+                                                   POP             : // ...XY  -> ...X
+                    stackEntryPresent2 ?
+                        stackEntryNecessary3 ?
+                            stackEntryNecessary0 ? UNSUPPORTED     : // ...XYO -> ...OO
+                                                   POP2_X1         : // ...XYO -> ...O
+                        // !stackEntryNecessary3
+                            stackEntryNecessary0 ? POP2_X1         : // ...XYO -> ...O
+                            stackEntryPresent0   ? POP3            : // ...XYO -> ...
+                                                   POP2            : // ...XY  -> ...
+                    // !stackEntryPresent2
+                        stackEntryNecessary3 ?
+                            stackEntryNecessary0 ? SWAP_POP_DUP    : // ...YO -> ...OO
+                                                   POP_X1          : // ...YO -> ...O
+                        // !stackEntryNecessary3
+                            stackEntryNecessary0 ? POP_X1          : // ...YO -> ...O
+                            stackEntryPresent0   ? POP2            : // ...YO -> ...
+                                                   POP             : // ...Y  -> ...
+                // !stackEntryPresent1
+                    stackEntryNecessary2 ?
+                        stackEntryNecessary3 ?
+                            stackEntryNecessary0 ? DUP_X1          : // ...XO -> ...OXO
+                                                   SWAP            : // ...XO -> ...OX
+                        // !stackEntryNecessary3
+                            stackEntryNecessary0 ? NOP             : // ...XO -> ...XO
+                            stackEntryPresent0   ? POP             : // ...XO -> ...X
+                                                   NOP             : // ...X  -> ...X
+                    stackEntryPresent2 ?
+                        stackEntryNecessary3 ?
+                            stackEntryNecessary0 ? SWAP_POP_DUP    : // ...XO -> ...OO
+                                                   POP_X1          : // ...XO -> ...O
+                        // !stackEntryNecessary3
+                            stackEntryNecessary0 ? POP_X1          : // ...XO -> ...O
+                            stackEntryPresent0   ? POP2            : // ...XO -> ...
+                                                   POP             : // ...X  -> ...
+                    // !stackEntryPresent2
+                        stackEntryNecessary3 ?
+                            stackEntryNecessary0 ? DUP             : // ...O -> ...OO
+                                                   NOP             : // ...O -> ...O
+                        // !stackEntryNecessary3
+                            stackEntryNecessary0 ? NOP             : // ...O -> ...O
+                            stackEntryPresent0   ? POP             : // ...O -> ...
+                                                   NOP;              // ...  -> ...
+        }
+
+
+        private int fixedDup2(int instructionOffset, int topBefore, int topAfter)
+        {
+            boolean stackEntryPresent0 = isStackEntryPresentBefore(instructionOffset, topBefore - 0);
+            boolean stackEntryPresent1 = isStackEntryPresentBefore(instructionOffset, topBefore - 1);
+
+            boolean stackEntryNecessary0 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 0);
+            boolean stackEntryNecessary1 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 1);
+            boolean stackEntryNecessary2 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 2);
+            boolean stackEntryNecessary3 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 3);
+
+            return
+                stackEntryNecessary3 ?
+                    stackEntryNecessary2 ?
+                        stackEntryNecessary1 ?
+                            stackEntryNecessary0 ? DUP2             : // ...AB -> ...ABAB
+                                                   SWAP_DUP_X1      : // ...AB -> ...ABA
+                        // !stackEntryNecessary1
+                            stackEntryNecessary0 ? DUP              : // ...AB -> ...ABB
+                                                   NOP              : // ...AB -> ...AB
+                    // !stackEntryNecessary2
+                        stackEntryNecessary1 ?
+                            stackEntryNecessary0 ? SWAP_DUP_X1_SWAP : // ...AB -> ...AAB
+                            stackEntryPresent0   ? POP_DUP          : // ...AB -> ...AA
+                                                   DUP              : // ...A  -> ...AA
+                        // !stackEntryNecessary1
+                            stackEntryNecessary0 ? NOP              : // ...AB -> ...AB
+                            stackEntryPresent0   ? POP              : // ...AB -> ...A
+                                                   NOP              : // ...A  -> ...A
+                // !stackEntryNecessary3
+                    stackEntryNecessary2 ?
+                        stackEntryNecessary1 ?
+                            stackEntryNecessary0 ? DUP_X1           : // ...AB -> ...BAB
+                                                   SWAP             : // ...AB -> ...BA
+                        stackEntryPresent1 ?
+                            stackEntryNecessary0 ? SWAP_POP_DUP     : // ...AB -> ...BB
+                                                   POP_X1           : // ...AB -> ...B
+                        // !stackEntryPresent1
+                            stackEntryNecessary0 ? POP              : // ...B  -> ...BB
+                                                   NOP              : // ...B  -> ...B
+                    // !stackEntryNecessary2
+                        stackEntryNecessary1 ?
+                            stackEntryNecessary0 ? NOP              : // ...AB -> ...AB
+                            stackEntryPresent0   ? POP              : // ...AB -> ...A
+                                                   NOP              : // ...A  -> ...A
+                        stackEntryPresent1 ?
+                            stackEntryNecessary0 ? POP_X1           : // ...AB -> ...B
+                            stackEntryPresent0   ? POP2             : // ...AB -> ...
+                                                   POP              : // ...A  -> ...
+                        // !stackEntryPresent1
+                            stackEntryNecessary0 ? NOP              : // ...B  -> ...B
+                            stackEntryPresent0   ? POP              : // ...B  -> ...
+                                                   NOP;               // ...   -> ...
+        }
+
+
+        private int fixedDup2_x1(int instructionOffset, int topBefore, int topAfter)
+        {
+            // We're currently assuming the value to be duplicated
+            // is a long or a double, taking up two slots, or at
+            // least consistent.
+            boolean stackEntriesPresent01 = isStackEntriesPresentBefore(instructionOffset, topBefore - 0, topBefore - 1);
+            boolean stackEntryPresent2    = isStackEntryPresentBefore(  instructionOffset, topBefore - 2);
+
+            boolean stackEntriesNecessary01 = isStackEntriesNecessaryAfter(instructionOffset, topAfter - 0, topAfter - 1);
+            boolean stackEntryNecessary2    = isStackEntryNecessaryAfter(  instructionOffset, topAfter - 2);
+            boolean stackEntriesNecessary34 = isStackEntriesNecessaryAfter(instructionOffset, topAfter - 3, topAfter - 4);
+
+            // Figure out which stack entries should be moved,
+            // copied, or removed.
+            return
+                stackEntryNecessary2 ?
+                    stackEntriesNecessary34 ?
+                        stackEntriesNecessary01 ? DUP2_X1      : // ...XAB -> ...ABXAB
+                                                  MOV2_X1      : // ...XAB -> ...ABX
+                    // !stackEntriesNecessary34
+                        stackEntriesNecessary01 ? NOP          : // ...XAB -> ...XAB
+                        stackEntriesPresent01   ? POP2         : // ...XAB -> ...X
+                                                  NOP          : // ...X   -> ...X
+                stackEntryPresent2 ?
+                    stackEntriesNecessary34 ?
+                        stackEntriesNecessary01 ? UNSUPPORTED  : // ...XAB -> ...ABAB
+                                                  POP_X2       : // ...XAB -> ...AB
+                    // !stackEntriesNecessary34
+                        stackEntriesNecessary01 ? DUP2_X1_POP3 : // ...XAB -> ...AB
+                        stackEntriesPresent01   ? POP3         : // ...XAB -> ...
+                                                  POP          : // ...X   -> ...
+                // !stackEntryPresent2
+                    stackEntriesNecessary34 ?
+                        stackEntriesNecessary01 ? DUP2         : // ...AB -> ...ABAB
+                                                  NOP          : // ...AB -> ...AB
+                    // !stackEntriesNecessary34
+                        stackEntriesNecessary01 ? NOP          : // ...AB -> ...AB
+                        stackEntriesPresent01   ? POP2         : // ...AB -> ...
+                                                  NOP;           // ...   -> ...
+        }
+
+
+        private int fixedDup2_x2(int instructionOffset, int topBefore, int topAfter)
+        {
+            // We're currently assuming the value to be duplicated
+            // is a long or a double, taking up two slots, or at
+            // least consistent.
+            boolean stackEntriesPresent01 = isStackEntriesPresentBefore(instructionOffset, topBefore - 0, topBefore - 1);
+            boolean stackEntryPresent2    = isStackEntryPresentBefore(  instructionOffset, topBefore - 2);
+            boolean stackEntryPresent3    = isStackEntryPresentBefore(  instructionOffset, topBefore - 3);
+
+            boolean stackEntriesNecessary01 = isStackEntriesNecessaryAfter(instructionOffset, topAfter - 0, topAfter - 1);
+            boolean stackEntryNecessary2    = isStackEntryNecessaryAfter(  instructionOffset, topAfter - 2);
+            boolean stackEntryNecessary3    = isStackEntryNecessaryAfter(  instructionOffset, topAfter - 3);
+            boolean stackEntriesNecessary45 = isStackEntriesNecessaryAfter(instructionOffset, topAfter - 4, topAfter - 5);
+
+            // Figure out which stack entries should be moved,
+            // copied, or removed.
+            return
+                stackEntryNecessary2 ?
+                    stackEntryNecessary3 ?
+                        stackEntriesNecessary45 ?
+                            stackEntriesNecessary01 ? DUP2_X2          : // ...XYAB -> ...ABXYAB
+                                                      MOV2_X2          : // ...XYAB -> ...ABXY
+                        // !stackEntriesNecessary45
+                            stackEntriesNecessary01 ? NOP              : // ...XYAB -> ...XYAB
+                            stackEntriesPresent01   ? POP2             : // ...XYAB -> ...XY
+                                                      NOP              : // ...XY   -> ...XY
+                    stackEntryPresent3 ?
+                        stackEntriesNecessary45 ?
+                            stackEntriesNecessary01 ? UNSUPPORTED      : // ...XYAB -> ...ABYAB
+                                                      DUP2_X2_SWAP_POP : // ...XYAB -> ...ABY
+                        // !stackEntriesNecessary45
+                            stackEntriesNecessary01 ? POP_X3           : // ...XYAB -> ...YAB
+                            stackEntriesPresent01   ? POP2_SWAP_POP    : // ...XYAB -> ...Y
+                                                      POP_X1           : // ...XY   -> ...Y
+                    // !stackEntryPresent3
+                        stackEntriesNecessary45 ?
+                            stackEntriesNecessary01 ? DUP2_X1          : // ...YAB -> ...ABYAB
+                                                      MOV2_X1          : // ...YAB -> ...ABY
+                        // !stackEntriesNecessary45
+                            stackEntriesNecessary01 ? NOP              : // ...YAB -> ...YAB
+                            stackEntriesPresent01   ? POP2             : // ...YAB -> ...Y
+                                                      NOP              : // ...Y   -> ...Y
+                stackEntryPresent2 ?
+                    stackEntryNecessary3 ?
+                        stackEntriesNecessary45 ?
+                            stackEntriesNecessary01 ? UNSUPPORTED      : // ...XYAB -> ...ABXAB
+                                                      DUP2_X2_POP3     : // ...XYAB -> ...ABX
+                        // !stackEntriesNecessary45
+                            stackEntriesNecessary01 ? POP_X2           : // ...XYAB -> ...XAB
+                            stackEntriesPresent01   ? POP3             : // ...XYAB -> ...X
+                                                      POP              : // ...XY   -> ...X
+                    stackEntryPresent3 ?
+                        stackEntriesNecessary45 ?
+                            stackEntriesNecessary01 ? UNSUPPORTED      : // ...XYAB -> ...ABAB
+                                                      POP2_X2          : // ...XYAB -> ...AB
+                        // !stackEntriesNecessary45
+                            stackEntriesNecessary01 ? POP2_X2          : // ...XYAB -> ...AB
+                            stackEntriesPresent01   ? POP4             : // ...XYAB -> ...
+                                                      POP2             : // ...XY   -> ...
+                    // !stackEntryPresent3
+                        stackEntriesNecessary45 ?
+                            stackEntriesNecessary01 ? UNSUPPORTED      : // ...YAB -> ...ABAB
+                                                      POP_X2           : // ...YAB -> ...AB
+                        // !stackEntriesNecessary45
+                            stackEntriesNecessary01 ? POP_X2           : // ...YAB -> ...AB
+                            stackEntriesPresent01   ? POP3             : // ...YAB -> ...
+                                                      POP              : // ...Y   -> ...
+                // !stackEntryPresent2
+                    stackEntryNecessary3 ?
+                        stackEntriesNecessary45 ?
+                            stackEntriesNecessary01 ? DUP2_X1          : // ...XAB -> ...ABXAB
+                                                      MOV2_X1          : // ...XAB -> ...ABX
+                        // !stackEntriesNecessary45
+                            stackEntriesNecessary01 ? NOP              : // ...XAB -> ...XAB
+                            stackEntriesPresent01   ? POP2             : // ...XAB -> ...X
+                                                      NOP              : // ...X   -> ...X
+                    stackEntryPresent3 ?
+                        stackEntriesNecessary45 ?
+                            stackEntriesNecessary01 ? UNSUPPORTED      : // ...XAB -> ...ABAB
+                                                      POP_X2           : // ...XAB -> ...AB
+                        // !stackEntriesNecessary45
+                            stackEntriesNecessary01 ? POP_X2           : // ...XAB -> ...AB
+                            stackEntriesPresent01   ? POP3             : // ...XAB -> ...
+                                                      POP              : // ...X   -> ...
+                    // !stackEntryPresent3
+                        stackEntriesNecessary45 ?
+                            stackEntriesNecessary01 ? DUP2             : // ...AB -> ...ABAB
+                                                      NOP              : // ...AB -> ...AB
+                        // !stackEntriesNecessary45
+                            stackEntriesNecessary01 ? NOP              : // ...AB -> ...AB
+                            stackEntriesPresent01   ? POP2             : // ...AB -> ...
+                                                      NOP;               // ...   -> ...
+        }
+
+
+        private int fixedSwap(int instructionOffset, int topBefore, int topAfter)
+        {
+            boolean stackEntryPresent0 = isStackEntryPresentBefore(instructionOffset, topBefore - 0);
+            boolean stackEntryPresent1 = isStackEntryPresentBefore(instructionOffset, topBefore - 1);
+
+            boolean stackEntryNecessary0 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 0);
+            boolean stackEntryNecessary1 = isStackEntryNecessaryAfter(instructionOffset, topAfter - 1);
+
+            // Figure out which stack entries should be moved
+            // or removed.
+            return
+                stackEntryNecessary0 ?
+                    stackEntryNecessary1 ? SWAP   : // ...AB -> ...BA
+                    stackEntryPresent0   ? POP    : // ...AB -> ...A
+                                           NOP    : // ...A  -> ...A
+                stackEntryPresent1       ? POP_X1 : // ...AB -> ...B
+                                           NOP;     // ...B -> ...B
         }
     }
 
@@ -825,31 +1407,17 @@ implements   AttributeVisitor
     // Small utility methods.
 
     /**
-     * Marks the variable and the corresponding producing instructions
-     * of the consumer at the given offset.
-     * @param consumerOffset the offset of the consumer.
-     * @param variableIndex  the index of the variable to be marked.
+     * Marks the producing instructions of the variable consumer at the given
+     * offset.
+     * @param consumerOffset the offset of the variable consumer.
+     * @param variableIndex  the index of the variable that is loaded.
      */
     private void markVariableProducers(int consumerOffset,
                                        int variableIndex)
     {
-        TracedVariables tracedVariables =
-            partialEvaluator.getVariablesBefore(consumerOffset);
+        InstructionOffsetValue producerOffsets =
+            partialEvaluator.getVariablesBefore(consumerOffset).getProducerValue(variableIndex).instructionOffsetValue();
 
-        // Mark the producer of the loaded value.
-        markVariableProducers(tracedVariables.getProducerValue(variableIndex).instructionOffsetValue(),
-                              variableIndex);
-    }
-
-
-    /**
-     * Marks the variable and its producing instructions at the given offsets.
-     * @param producerOffsets the offsets of the producers to be marked.
-     * @param variableIndex   the index of the variable to be marked.
-     */
-    private void markVariableProducers(InstructionOffsetValue producerOffsets,
-                                       int                    variableIndex)
-    {
         if (producerOffsets != null)
         {
             int offsetCount = producerOffsets.instructionOffsetCount();
@@ -859,8 +1427,42 @@ implements   AttributeVisitor
                 // at the producing offset.
                 int offset = producerOffsets.instructionOffset(offsetIndex);
 
-                markVariableAfter(offset, variableIndex);
                 markInstruction(offset);
+            }
+        }
+    }
+
+
+    /**
+     * Marks the initializing instructions of the variable consumer at the given
+     * offset.
+     * @param consumerOffset the offset of the variable consumer.
+     * @param variableIndex  the index of the variable that is loaded.
+     */
+    private void markVariableInitializers(int consumerOffset,
+                                          int variableIndex)
+    {
+        InstructionOffsetValue producerOffsets =
+            simplePartialEvaluator.getVariablesBefore(consumerOffset).getProducerValue(variableIndex).instructionOffsetValue();
+
+        if (producerOffsets != null)
+        {
+            int offsetCount = producerOffsets.instructionOffsetCount();
+            for (int offsetIndex = 0; offsetIndex < offsetCount; offsetIndex++)
+            {
+                // Make sure the variable and the instruction are marked
+                // at the producing offset.
+                int offset = producerOffsets.instructionOffset(offsetIndex);
+
+                if (!isInstructionNecessary(offset) &&
+                    isVariableInitialization(offset, variableIndex))
+                {
+                    if (DEBUG) System.out.print("  Marking initialization of v"+variableIndex+" at ");
+
+                    markInstruction(offset);
+
+                    if (DEBUG) System.out.println();
+                }
             }
         }
     }
@@ -877,9 +1479,14 @@ implements   AttributeVisitor
                                     int         consumerOffset,
                                     Instruction consumer)
     {
+        TracedStack tracedStack =
+            partialEvaluator.getStackBefore(consumerOffset);
+
+        int stackSize = tracedStack.size();
+
         // Mark the producers of the popped values.
         int popCount = consumer.stackPopCount(clazz);
-        for (int stackIndex = 0; stackIndex < popCount; stackIndex++)
+        for (int stackIndex = stackSize - popCount; stackIndex < stackSize; stackIndex++)
         {
             markStackEntryProducers(consumerOffset, stackIndex);
         }
@@ -891,20 +1498,22 @@ implements   AttributeVisitor
      * of the consumer at the given offset, if the stack entry of the
      * consumer is marked.
      * @param consumerOffset     the offset of the consumer.
-     * @param consumerStackIndex the index of the stack entry to be checked
+     * @param consumerTopStackIndex the index of the stack entry to be checked
      *                           (counting from the top).
-     * @param producerStackIndex the index of the stack entry to be marked
+     * @param producerTopStackIndex the index of the stack entry to be marked
      *                           (counting from the top).
      */
     private void conditionallyMarkStackEntryProducers(int consumerOffset,
-                                                      int consumerStackIndex,
-                                                      int producerStackIndex)
+                                                      int consumerTopStackIndex,
+                                                      int producerTopStackIndex)
     {
-        int top = partialEvaluator.getStackAfter(consumerOffset).size() - 1;
+        int consumerBottomStackIndex = partialEvaluator.getStackAfter(consumerOffset).size() - consumerTopStackIndex - 1;
 
-        if (isStackEntryNecessaryAfter(consumerOffset, top - consumerStackIndex))
+        if (isStackEntryNecessaryAfter(consumerOffset, consumerBottomStackIndex))
         {
-            markStackEntryProducers(consumerOffset, producerStackIndex);
+            int producerBottomStackIndex = partialEvaluator.getStackBefore(consumerOffset).size() - producerTopStackIndex - 1;
+
+            markStackEntryProducers(consumerOffset, producerBottomStackIndex);
         }
     }
 
@@ -914,20 +1523,15 @@ implements   AttributeVisitor
      * of the consumer at the given offset.
      * @param consumerOffset the offset of the consumer.
      * @param stackIndex     the index of the stack entry to be marked
-     *                        (counting from the top).
+     *                        (counting from the bottom).
      */
     private void markStackEntryProducers(int consumerOffset,
                                          int stackIndex)
     {
-        TracedStack tracedStack =
-            partialEvaluator.getStackBefore(consumerOffset);
-
-        int stackBottomIndex = tracedStack.size() - 1 - stackIndex;
-
-        if (!isStackSimplifiedBefore(consumerOffset, stackBottomIndex))
+        if (!isStackSimplifiedBefore(consumerOffset, stackIndex))
         {
-            markStackEntryProducers(tracedStack.getTopProducerValue(stackIndex).instructionOffsetValue(),
-                                    stackBottomIndex);
+            markStackEntryProducers(partialEvaluator.getStackBefore(consumerOffset).getBottomProducerValue(stackIndex).instructionOffsetValue(),
+                                    stackIndex);
         }
     }
 
@@ -1031,244 +1635,6 @@ implements   AttributeVisitor
 
             // Mark the branch instruction.
             markInstruction(branchOrigin);
-        }
-    }
-
-
-    /**
-     * Marks the specified instruction if it is a required dup/swap instruction,
-     * replacing it by an appropriate variant if necessary.
-     * @param clazz         the class that is being checked.
-     * @param codeAttribute the code that is being checked.
-     * @param dupOffset     the offset of the dup/swap instruction.
-     * @param instruction   the dup/swap instruction.
-     */
-    private void fixDupInstruction(Clazz         clazz,
-                                   CodeAttribute codeAttribute,
-                                   int           dupOffset,
-                                   Instruction   instruction)
-    {
-        int top = partialEvaluator.getStackAfter(dupOffset).size() - 1;
-
-        byte oldOpcode = instruction.opcode;
-        byte newOpcode = 0;
-
-        // Simplify the popping instruction if possible.
-        switch (oldOpcode)
-        {
-            case InstructionConstants.OP_DUP:
-            {
-                boolean stackEntryPresent0 = isStackEntryNecessaryAfter(dupOffset, top - 0);
-                boolean stackEntryPresent1 = isStackEntryNecessaryAfter(dupOffset, top - 1);
-
-                // Should either the original element or the copy be present?
-                if (stackEntryPresent0 ||
-                    stackEntryPresent1)
-                {
-                    // Should both the original element and the copy be present?
-                    if (stackEntryPresent0 &&
-                        stackEntryPresent1)
-                    {
-                        newOpcode = InstructionConstants.OP_DUP;
-                    }
-                }
-                break;
-            }
-            case InstructionConstants.OP_DUP_X1:
-            {
-                boolean stackEntryPresent0 = isStackEntryNecessaryAfter(dupOffset, top - 0);
-                boolean stackEntryPresent1 = isStackEntryNecessaryAfter(dupOffset, top - 1);
-                boolean stackEntryPresent2 = isStackEntryNecessaryAfter(dupOffset, top - 2);
-
-                // Should either the original element or the copy be present?
-                if (stackEntryPresent0 ||
-                    stackEntryPresent2)
-                {
-                    // Should the copy be present?
-                    if (stackEntryPresent2)
-                    {
-                        // Compute the number of elements to be skipped.
-                        int skipCount = stackEntryPresent1 ? 1 : 0;
-
-                        // Should the original element be present?
-                        if (stackEntryPresent0)
-                        {
-                            // Copy the original element.
-                            newOpcode = (byte)(InstructionConstants.OP_DUP + skipCount);
-                        }
-                        else if (skipCount == 1)
-                        {
-                            // Move the original element.
-                            newOpcode = InstructionConstants.OP_SWAP;
-                        }
-                    }
-                }
-                break;
-            }
-            case InstructionConstants.OP_DUP_X2:
-            {
-                boolean stackEntryPresent0 = isStackEntryNecessaryAfter(dupOffset, top - 0);
-                boolean stackEntryPresent1 = isStackEntryNecessaryAfter(dupOffset, top - 1);
-                boolean stackEntryPresent2 = isStackEntryNecessaryAfter(dupOffset, top - 2);
-                boolean stackEntryPresent3 = isStackEntryNecessaryAfter(dupOffset, top - 3);
-
-                // Should either the original element or the copy be present?
-                if (stackEntryPresent0 ||
-                    stackEntryPresent3)
-                {
-                    // Should the copy be present?
-                    if (stackEntryPresent3)
-                    {
-                        int skipCount = (stackEntryPresent1 ? 1 : 0) +
-                                        (stackEntryPresent2 ? 1 : 0);
-
-                        // Should the original element be present?
-                        if (stackEntryPresent0)
-                        {
-                            // Copy the original element.
-                            newOpcode = (byte)(InstructionConstants.OP_DUP + skipCount);
-                        }
-                        else if (skipCount == 1)
-                        {
-                            // Move the original element.
-                            newOpcode = InstructionConstants.OP_SWAP;
-                        }
-                        else if (skipCount == 2)
-                        {
-                            // We can't easily move the original element.
-                            throw new UnsupportedOperationException("Can't handle dup_x2 instruction moving original element across two elements at ["+dupOffset +"]");
-                        }
-                    }
-                }
-                break;
-            }
-            case InstructionConstants.OP_DUP2:
-            {
-                boolean stackEntriesPresent01 = isStackEntriesNecessaryAfter(dupOffset, top - 0, top - 1);
-                boolean stackEntriesPresent23 = isStackEntriesNecessaryAfter(dupOffset, top - 2, top - 3);
-
-                // Should either the original element or the copy be present?
-                if (stackEntriesPresent01 ||
-                    stackEntriesPresent23)
-                {
-                    // Should both the original element and the copy be present?
-                    if (stackEntriesPresent01 &&
-                        stackEntriesPresent23)
-                    {
-                        newOpcode = InstructionConstants.OP_DUP2;
-                    }
-                }
-                break;
-            }
-            case InstructionConstants.OP_DUP2_X1:
-            {
-                boolean stackEntriesPresent01 = isStackEntriesNecessaryAfter(dupOffset, top - 0, top - 1);
-                boolean stackEntryPresent2    = isStackEntryNecessaryAfter(dupOffset, top - 2);
-                boolean stackEntriesPresent34 = isStackEntriesNecessaryAfter(dupOffset, top - 3, top - 4);
-
-                // Should either the original element or the copy be present?
-                if (stackEntriesPresent01 ||
-                    stackEntriesPresent34)
-                {
-                    // Should the copy be present?
-                    if (stackEntriesPresent34)
-                    {
-                        int skipCount = stackEntryPresent2 ? 1 : 0;
-
-                        // Should the original element be present?
-                        if (stackEntriesPresent01)
-                        {
-                            // Copy the original element.
-                            newOpcode = (byte)(InstructionConstants.OP_DUP2 + skipCount);
-                        }
-                        else if (skipCount > 0)
-                        {
-                            // We can't easily move the original element.
-                            throw new UnsupportedOperationException("Can't handle dup2_x1 instruction moving original element across "+skipCount+" elements at ["+dupOffset +"]");
-                        }
-                    }
-                }
-                break;
-            }
-            case InstructionConstants.OP_DUP2_X2:
-            {
-                boolean stackEntriesPresent01 = isStackEntriesNecessaryAfter(dupOffset, top - 0, top - 1);
-                boolean stackEntryPresent2    = isStackEntryNecessaryAfter(dupOffset, top - 2);
-                boolean stackEntryPresent3    = isStackEntryNecessaryAfter(dupOffset, top - 3);
-                boolean stackEntriesPresent45 = isStackEntriesNecessaryAfter(dupOffset, top - 4, top - 5);
-
-                // Should either the original element or the copy be present?
-                if (stackEntriesPresent01 ||
-                    stackEntriesPresent45)
-                {
-                    // Should the copy be present?
-                    if (stackEntriesPresent45)
-                    {
-                        int skipCount = (stackEntryPresent2 ? 1 : 0) +
-                                        (stackEntryPresent3 ? 1 : 0);
-
-                        // Should the original element be present?
-                        if (stackEntriesPresent01)
-                        {
-                            // Copy the original element.
-                            newOpcode = (byte)(InstructionConstants.OP_DUP2 + skipCount);
-                        }
-                        else if (skipCount > 0)
-                        {
-                            // We can't easily move the original element.
-                            throw new UnsupportedOperationException("Can't handle dup2_x2 instruction moving original element across "+skipCount+" elements at ["+dupOffset +"]");
-                        }
-                    }
-                }
-                break;
-            }
-            case InstructionConstants.OP_SWAP:
-            {
-                boolean stackEntryPresent0 = isStackEntryNecessaryAfter(dupOffset, top - 0);
-                boolean stackEntryPresent1 = isStackEntryNecessaryAfter(dupOffset, top - 1);
-
-                // Will either element be present?
-                if (stackEntryPresent0 ||
-                    stackEntryPresent1)
-                {
-                    // Will both elements be present?
-                    if (stackEntryPresent0 &&
-                        stackEntryPresent1)
-                    {
-                        newOpcode = InstructionConstants.OP_SWAP;
-                    }
-                }
-                break;
-            }
-        }
-
-        if      (newOpcode == 0)
-        {
-            // Delete the instruction.
-            codeAttributeEditor.deleteInstruction(dupOffset);
-
-            if (extraDeletedInstructionVisitor != null)
-            {
-                extraDeletedInstructionVisitor.visitSimpleInstruction(null, null, null, dupOffset, null);
-            }
-
-            if (DEBUG) System.out.println("  Marking but deleting instruction "+instruction.toString(dupOffset));
-        }
-        else if (newOpcode == oldOpcode)
-        {
-            // Leave the instruction unchanged.
-            codeAttributeEditor.undeleteInstruction(dupOffset);
-
-            if (DEBUG) System.out.println("  Marking unchanged instruction "+instruction.toString(dupOffset));
-        }
-        else
-        {
-            // Replace the instruction.
-            Instruction replacementInstruction = new SimpleInstruction(newOpcode);
-            codeAttributeEditor.replaceInstruction(dupOffset,
-                                                   replacementInstruction);
-
-            if (DEBUG) System.out.println("  Replacing instruction "+instruction.toString(dupOffset)+" by "+replacementInstruction.toString());
         }
     }
 
@@ -1445,7 +1811,7 @@ implements   AttributeVisitor
         // Remember the replacement instruction.
         Instruction replacementInstruction =
              new ConstantInstruction(InstructionConstants.OP_INVOKESTATIC,
-                                     constantInstruction.constantIndex).shrink();
+                                     constantInstruction.constantIndex);
 
         if (DEBUG) System.out.println("  Replacing by static invocation "+constantInstruction.toString(offset)+" -> "+replacementInstruction.toString());
 
@@ -1587,22 +1953,6 @@ implements   AttributeVisitor
         int maxStack   = codeAttribute.u2maxStack;
 
         // Create new arrays for storing information at each instruction offset.
-        if (variablesNecessaryAfter.length    < codeLength ||
-            variablesNecessaryAfter[0].length < maxLocals)
-        {
-            variablesNecessaryAfter = new boolean[codeLength][maxLocals];
-        }
-        else
-        {
-            for (int offset = 0; offset < codeLength; offset++)
-            {
-                for (int index = 0; index < maxLocals; index++)
-                {
-                    variablesNecessaryAfter[offset][index] = false;
-                }
-            }
-        }
-
         if (stacksNecessaryAfter.length    < codeLength ||
             stacksNecessaryAfter[0].length < maxStack)
         {
@@ -1612,10 +1962,7 @@ implements   AttributeVisitor
         {
             for (int offset = 0; offset < codeLength; offset++)
             {
-                for (int index = 0; index < maxStack; index++)
-                {
-                    stacksNecessaryAfter[offset][index] = false;
-                }
+                Arrays.fill(stacksNecessaryAfter[offset], 0, maxStack, false);
             }
         }
 
@@ -1628,10 +1975,7 @@ implements   AttributeVisitor
         {
             for (int offset = 0; offset < codeLength; offset++)
             {
-                for (int index = 0; index < maxStack; index++)
-                {
-                    stacksSimplifiedBefore[offset][index] = false;
-                }
+                Arrays.fill(stacksSimplifiedBefore[offset], 0, maxStack, false);
             }
         }
 
@@ -1641,17 +1985,114 @@ implements   AttributeVisitor
         }
         else
         {
-            for (int index = 0; index < codeLength; index++)
-            {
-                instructionsNecessary[index] = false;
-            }
+            Arrays.fill(instructionsNecessary, 0, codeLength, false);
         }
     }
 
 
     /**
-     * Returns whether the given stack entry is present after execution of the
-     * instruction at the given offset.
+     * Returns whether the specified variable is initialized at the specified
+     * offset.
+     */
+    private boolean isVariableInitialization(int instructionOffset,
+                                             int variableIndex)
+    {
+        // Wasn't the variable set yet?
+        Value valueBefore = partialEvaluator.getVariablesBefore(instructionOffset).getValue(variableIndex);
+        if (valueBefore == null)
+        {
+            return true;
+        }
+
+        // Is the computational type different now?
+        Value valueAfter = partialEvaluator.getVariablesAfter(instructionOffset).getValue(variableIndex);
+        if (valueAfter.computationalType() != valueBefore.computationalType())
+        {
+            return true;
+        }
+
+        // Is the reference type different now?
+        if (valueAfter.computationalType() == Value.TYPE_REFERENCE &&
+            (valueAfter.referenceValue().isNull() == Value.ALWAYS ||
+             !valueAfter.referenceValue().getType().equals(valueBefore.referenceValue().getType())))
+        {
+            return true;
+        }
+
+        // Was the producer an argument (which may be removed)?
+        Value producersBefore = partialEvaluator.getVariablesBefore(instructionOffset).getProducerValue(variableIndex);
+        return producersBefore.instructionOffsetValue().instructionOffsetCount() == 1 &&
+               producersBefore.instructionOffsetValue().instructionOffset(0) == PartialEvaluator.AT_METHOD_ENTRY;
+    }
+
+
+    /**
+     * Marks the stack entry after the given offset.
+     * @param instructionOffset the offset of the stack entry to be marked.
+     * @param stackIndex        the index of the stack entry to be marked
+     *                          (counting from the bottom).
+     */
+    private void markStackEntryAfter(int instructionOffset,
+                                     int stackIndex)
+    {
+        if (!isStackEntryNecessaryAfter(instructionOffset, stackIndex))
+        {
+            if (DEBUG) System.out.print("["+instructionOffset+".s"+stackIndex+"],");
+
+            stacksNecessaryAfter[instructionOffset][stackIndex] = true;
+
+            if (maxMarkedOffset < instructionOffset)
+            {
+                maxMarkedOffset = instructionOffset;
+            }
+        }
+    }
+
+
+
+    /**
+     * Returns whether the stack specified entries before the given offset are
+     * present.
+     */
+    private boolean isStackEntriesPresentBefore(int instructionOffset,
+                                                int stackIndex1,
+                                                int stackIndex2)
+    {
+        boolean present1 = isStackEntryPresentBefore(instructionOffset, stackIndex1);
+        boolean present2 = isStackEntryPresentBefore(instructionOffset, stackIndex2);
+
+//        if (present1 ^ present2)
+//        {
+//            throw new UnsupportedOperationException("Can't handle partial use of dup2 instructions");
+//        }
+
+        return present1 || present2;
+    }
+
+
+    /**
+     * Returns whether the specified stack entry before the given offset is
+     * present.
+     * @param instructionOffset the offset of the stack entry to be checked.
+     * @param stackIndex        the index of the stack entry to be checked
+     *                          (counting from the bottom).
+     */
+    private boolean isStackEntryPresentBefore(int instructionOffset,
+                                              int stackIndex)
+    {
+        TracedStack tracedStack =
+            partialEvaluator.getStackBefore(instructionOffset);
+
+        InstructionOffsetValue producerOffsets =
+            tracedStack.getBottomProducerValue(stackIndex).instructionOffsetValue();
+
+        return isAnyStackEntryNecessaryAfter(producerOffsets, stackIndex);
+    }
+
+
+    /**
+     * Returns whether the stack specified entries after the given offset are
+     * necessary.
      */
     private boolean isStackEntriesNecessaryAfter(int instructionOffset,
                                                  int stackIndex1,
@@ -1670,150 +2111,12 @@ implements   AttributeVisitor
 
 
     /**
-     * Returns whether the specified variable must be initialized at the
-     * specified offset, according to the verifier of the JVM.
+     * Returns whether any of the stack entries after the given offsets are
+     * necessary.
+     * @param instructionOffsets the offsets of the stack entries to be checked.
+     * @param stackIndex         the index of the stack entries to be checked
+     *                           (counting from the bottom).
      */
-    private boolean isVariableInitializationNecessary(Clazz         clazz,
-                                                      Method        method,
-                                                      CodeAttribute codeAttribute,
-                                                      int           initializationOffset,
-                                                      int           variableIndex)
-    {
-        int codeLength = codeAttribute.u4codeLength;
-
-        // Is the variable necessary anywhere at all?
-        if (isVariableNecessaryAfterAny(0, codeLength, variableIndex))
-        {
-            if (DEBUG) System.out.println("Simple partial evaluation for initialization of variable v"+variableIndex+" at ["+initializationOffset+"]");
-
-            // Lazily compute perform simple partial evaluation, the way the
-            // JVM preverifier would do it.
-            simplePartialEvaluator.visitCodeAttribute(clazz, method, codeAttribute);
-
-            if (DEBUG) System.out.println("End of simple partial evaluation for initialization of variable v"+variableIndex+" at ["+initializationOffset+"]");
-
-            // Check if the variable is necessary elsewhere.
-            for (int offset = 0; offset < codeLength; offset++)
-            {
-                if (isInstructionNecessary(offset))
-                {
-                    Value producer = partialEvaluator.getVariablesBefore(offset).getProducerValue(variableIndex);
-                    if (producer != null)
-                    {
-                        Value simpleProducer = simplePartialEvaluator.getVariablesBefore(offset).getProducerValue(variableIndex);
-                        if (simpleProducer != null)
-                        {
-                            InstructionOffsetValue producerOffsets =
-                                producer.instructionOffsetValue();
-                            InstructionOffsetValue simpleProducerOffsets =
-                                simpleProducer.instructionOffsetValue();
-
-                            // Does the sophisticated partial evaluation have fewer
-                            // producers than the simple one?
-                            // And does the simple partial evaluation point to an
-                            // initialization of the variable?
-                            if (producerOffsets.instructionOffsetCount() <
-                                simpleProducerOffsets.instructionOffsetCount() &&
-                                isVariableNecessaryAfterAny(producerOffsets, variableIndex) &&
-                                simpleProducerOffsets.contains(initializationOffset))
-                            {
-                                // Then the initialization is necessary.
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return false;
-    }
-
-
-    private void markVariableAfter(int instructionOffset,
-                                   int variableIndex)
-    {
-        if (!isVariableNecessaryAfter(instructionOffset, variableIndex))
-        {
-            if (DEBUG) System.out.print("["+instructionOffset+".v"+variableIndex+"],");
-
-            variablesNecessaryAfter[instructionOffset][variableIndex] = true;
-
-            if (maxMarkedOffset < instructionOffset)
-            {
-                maxMarkedOffset = instructionOffset;
-            }
-        }
-    }
-
-
-    /**
-     * Returns whether the specified variable is ever necessary after any
-     * instruction in the specified block.
-     */
-    private boolean isVariableNecessaryAfterAny(int startOffset,
-                                                int endOffset,
-                                                int variableIndex)
-    {
-        for (int offset = startOffset; offset < endOffset; offset++)
-        {
-            if (isVariableNecessaryAfter(offset, variableIndex))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-
-    /**
-     * Returns whether the specified variable is ever necessary after any
-     * instruction in the specified set of instructions offsets.
-     */
-    private boolean isVariableNecessaryAfterAny(InstructionOffsetValue instructionOffsetValue,
-                                                int                    variableIndex)
-    {
-        int count = instructionOffsetValue.instructionOffsetCount();
-
-        for (int index = 0; index < count; index++)
-        {
-            if (isVariableNecessaryAfter(instructionOffsetValue.instructionOffset(index),
-                                         variableIndex))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-
-    private boolean isVariableNecessaryAfter(int instructionOffset,
-                                             int variableIndex)
-    {
-        return instructionOffset == PartialEvaluator.AT_METHOD_ENTRY ||
-               variablesNecessaryAfter[instructionOffset][variableIndex];
-    }
-
-
-    private void markStackEntryAfter(int instructionOffset,
-                                     int stackIndex)
-    {
-        if (!isStackEntryNecessaryAfter(instructionOffset, stackIndex))
-        {
-            if (DEBUG) System.out.print("["+instructionOffset+".s"+stackIndex+"],");
-
-            stacksNecessaryAfter[instructionOffset][stackIndex] = true;
-
-            if (maxMarkedOffset < instructionOffset)
-            {
-                maxMarkedOffset = instructionOffset;
-            }
-        }
-    }
-
-
     private boolean isAnyStackEntryNecessaryAfter(InstructionOffsetValue instructionOffsets,
                                                   int                    stackIndex)
     {
@@ -1831,6 +2134,13 @@ implements   AttributeVisitor
     }
 
 
+    /**
+     * Returns whether the specified stack entry after the given offset is
+     * necessary.
+     * @param instructionOffset the offset of the stack entry to be checked.
+     * @param stackIndex        the index of the stack entry to be checked
+     *                          (counting from the bottom).
+     */
     private boolean isStackEntryNecessaryAfter(int instructionOffset,
                                                int stackIndex)
     {

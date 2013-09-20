@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -26,6 +26,8 @@ import proguard.classfile.attribute.*;
 import proguard.classfile.instruction.*;
 import proguard.classfile.instruction.visitor.InstructionVisitor;
 import proguard.classfile.util.SimplifiedVisitor;
+
+import java.util.Arrays;
 
 /**
  * This AttributeVisitor computes the stack sizes at all instruction offsets
@@ -140,10 +142,7 @@ implements   AttributeVisitor,
         }
         else
         {
-            for (int index = 0; index < codeLength; index++)
-            {
-                evaluated[index] = false;
-            }
+            Arrays.fill(evaluated, 0, codeLength, false);
         }
 
         // The initial stack is always empty.

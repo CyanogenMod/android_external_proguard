@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -42,7 +42,7 @@ implements   ClassVisitor
 
 
     /**
-     * Creates a new DescriptorKeepChecker.
+     * Creates a new FullyQualifiedClassNameChecker.
      */
     public FullyQualifiedClassNameChecker(ClassPool      programClassPool,
                                           ClassPool      libraryClassPool,
@@ -56,7 +56,7 @@ implements   ClassVisitor
 
     /**
      * Checks the classes mentioned in the given class specifications, printing
-     * notes if necessary. Returns the number of notes printed.
+     * notes if necessary.
      */
     public void checkClassSpecifications(List classSpecifications)
     {
@@ -173,7 +173,8 @@ implements   ClassVisitor
     private static boolean containsWildCards(String string)
     {
         return string != null &&
-            (string.indexOf('*')   >= 0 ||
+            (string.indexOf('!')   >= 0 ||
+             string.indexOf('*')   >= 0 ||
              string.indexOf('?')   >= 0 ||
              string.indexOf(',')   >= 0 ||
              string.indexOf("///") >= 0);

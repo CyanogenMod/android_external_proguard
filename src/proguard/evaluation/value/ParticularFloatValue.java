@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -79,17 +79,23 @@ final class ParticularFloatValue extends SpecificFloatValue
 
     public FloatValue add(FloatValue other)
     {
-        return value == 0.0 ? other : other.add(this);
+        // Careful: -0.0 + 0.0 == 0.0
+        //return value == 0.0 ? other : other.add(this);
+        return other.add(this);
     }
 
     public FloatValue subtract(FloatValue other)
     {
-        return value == 0.0 ? other.negate() : other.subtractFrom(this);
+        // Careful: -0.0 + 0.0 == 0.0
+        //return value == 0.0 ? other.negate() : other.subtractFrom(this);
+        return other.subtractFrom(this);
     }
 
     public FloatValue subtractFrom(FloatValue other)
     {
-        return value == 0.0 ? other : other.subtract(this);
+        // Careful: -0.0 + 0.0 == 0.0
+        //return value == 0.0 ? other : other.subtract(this);
+        return other.subtract(this);
     }
 
     public FloatValue multiply(FloatValue other)
@@ -128,7 +134,10 @@ final class ParticularFloatValue extends SpecificFloatValue
 
     public FloatValue generalize(ParticularFloatValue other)
     {
-        return this.value == other.value ? this : ValueFactory.FLOAT_VALUE;
+        // Also handle NaN and Infinity.
+        return Float.floatToRawIntBits(this.value) ==
+               Float.floatToRawIntBits(other.value) ?
+                   this : ValueFactory.FLOAT_VALUE;
     }
 
     public FloatValue add(ParticularFloatValue other)
@@ -191,8 +200,10 @@ final class ParticularFloatValue extends SpecificFloatValue
 
     public boolean equals(Object object)
     {
+        // Also handle NaN and Infinity.
         return super.equals(object) &&
-               this.value == ((ParticularFloatValue)object).value;
+               Float.floatToIntBits(this.value) ==
+               Float.floatToIntBits(((ParticularFloatValue)object).value);
     }
 
 

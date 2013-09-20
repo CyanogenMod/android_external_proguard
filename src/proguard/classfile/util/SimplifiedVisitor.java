@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -42,7 +42,7 @@ public abstract class SimplifiedVisitor
     /**
      * Visits any type of class member of the given class.
      */
-    public void visitAnyClass(Clazz Clazz)
+    public void visitAnyClass(Clazz clazz)
     {
         throw new UnsupportedOperationException("Method must be overridden in ["+this.getClass().getName()+"] if ever called");
     }
@@ -157,6 +157,18 @@ public abstract class SimplifiedVisitor
     }
 
 
+    public void visitInvokeDynamicConstant(Clazz clazz, InvokeDynamicConstant invokeDynamicConstant)
+    {
+        visitAnyConstant(clazz, invokeDynamicConstant);
+    }
+
+
+    public void visitMethodHandleConstant(Clazz clazz, MethodHandleConstant methodHandleConstant)
+    {
+        visitAnyConstant(clazz, methodHandleConstant);
+    }
+
+
     /**
      * Visits any type of RefConstant of the given class.
      */
@@ -199,6 +211,12 @@ public abstract class SimplifiedVisitor
     }
 
 
+    public void visitMethodTypeConstant(Clazz clazz, MethodTypeConstant methodTypeConstant)
+    {
+        visitAnyConstant(clazz, methodTypeConstant);
+    }
+
+
     public void visitNameAndTypeConstant(Clazz clazz, NameAndTypeConstant nameAndTypeConstant)
     {
         visitAnyConstant(clazz, nameAndTypeConstant);
@@ -219,6 +237,12 @@ public abstract class SimplifiedVisitor
     public void visitUnknownAttribute(Clazz clazz, UnknownAttribute unknownAttribute)
     {
         visitAnyAttribute(clazz, unknownAttribute);
+    }
+
+
+    public void visitBootstrapMethodsAttribute(Clazz clazz, BootstrapMethodsAttribute bootstrapMethodsAttribute)
+    {
+        visitAnyAttribute(clazz, bootstrapMethodsAttribute);
     }
 
 

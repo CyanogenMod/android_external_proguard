@@ -1,11 +1,22 @@
 
-<!doctype html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<!doctype html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
 <head>
 <meta http-equiv="content-type" content="text/html; charset=iso-8859-1">
 <meta http-equiv="content-style-type" content="text/css">
 <link rel="stylesheet" type="text/css" href="style.css">
 <title>ProGuard Downloads</title>
+<script type="text/javascript" language="JavaScript">
+<!--
+if (window.self==window.top)
+  window.top.location.replace("index.html#"+window.location.pathname+window.location.hash);
+else {
+  var hash="#"+window.location.pathname.replace(window.top.location.pathname.replace("index.html", ""), "");
+  if (window.top.location.hash!=hash)
+    window.top.location.hash=hash;
+}
+//-->
+</script>
 </head>
 <body>
 
@@ -16,33 +27,201 @@ License. Please consult the <a href="license.html">license page</a> for more
 details.
 <p>
 <b>ProGuard</b> is written in Java, so it requires a Java Runtime Environment
-   (JRE 1.4 or higher).
+   (JRE 1.5 or higher).
 <p>
-You can download the latest release (containing the program jar, the
-documentation you're reading now, examples, and the source code) from this
+You can download the latest release (containing the program jars, the
+documentation that you're reading now, examples, and the source code) from this
 location:
 <p>
-<center><a href="http://sourceforge.net/project/showfiles.php?group_id=54750"
-target="other">Download section</a> (at <a
-href="http://sourceforge.net/projects/proguard/"
-target="other">SourceForge</a>)</center>
+<center><a href="http://sourceforge.net/projects/proguard/files/"
+target="other">Download section at SourceForge</a></center>
 <p>
 
+The <a href="http://sourceforge.net/projects/proguard/files/proguard/"
+target="other">proguard</a> section contains major releases and updates with
+sub-minor version numbers, for applying emergency fixes. The
+<a href="http://sourceforge.net/projects/proguard/files/proguard%20beta/"
+target="other">proguard beta</a> section contains beta releases. These include
+new features and any less urgent bug fixes collected since the previous
+release.
+<p>
 If you're still working with an older version of <b>ProGuard</b>, check out
 the summary of changes below, to see if you're missing something essential.
 Better look at the up-to-date <a
 href="http://proguard.sourceforge.net/downloads.html">on-line version</a> if
-you're reading a local copy of this page.
+you're reading a local copy of this page. Unless noted otherwise,
+<b>ProGuard</b> remains compatible across versions, so don't be afraid to
+update.
 <p>
-The download section may also contain updates with sub-minor version numbers.
-These versions are typically released shortly after their parent versions, for
-applying emergency fixes. Please make sure to look at those if you are
-encountering any problems with recent releases.
-<p>
-Finally, there may be beta versions of upcoming releases. They may be of
-interest too, because they typically contain any less urgent bug fixes
-collected since the previous release.
-<p>
+If you're only interested in individual jar files for your build process, you
+can also download them from the Maven Central repository, with GroupId
+<a href="http://search.maven.org/#search|ga|1|g:%22net.sf.proguard%22"
+target="other">net.sf.proguard</a> and ArtifactIds
+<a href="http://search.maven.org/#search|ga|1|a:%22proguard-parent%22"
+target="other">proguard-parent</a>,
+<a href="http://search.maven.org/#search|ga|1|a:%22proguard-base%22"
+target="other">proguard-base</a>,
+<a href="http://search.maven.org/#search|ga|1|a:%22proguard-gui%22"
+target="other">proguard-gui</a>,
+<a href="http://search.maven.org/#search|ga|1|a:%22proguard-anttask%22"
+target="other">proguard-anttask</a>,
+<a href="http://search.maven.org/#search|ga|1|a:%22proguard-gradle%22"
+target="other">proguard-gradle</a>,
+<a href="http://search.maven.org/#search|ga|1|a:%22proguard-wtk-plugin%22"
+target="other">proguard-wtk-plugin</a>, and
+<a href="http://search.maven.org/#search|ga|1|a:%22proguard-retrace%22"
+target="other">proguard-retrace</a>.
+
+<h3><div>Jul 2013</div> Version 4.10</h3>
+<ul>
+<li>Made Gradle task resolve files lazily.
+<li>Enabled as-needed execution in Gradle task.
+<li>Using standard string interpolation for Gradle configuration.
+<li>Reduced log levels for console output in Gradle task.
+<li>Updated documentation and examples.
+</ul>
+
+<h3><div>Mar 2013</div> Version 4.9</h3>
+<ul>
+<li>Added Gradle task.
+<li>Added more peephole optimizations for strings.
+<li>Improved optimization of classes with static initializers.
+<li>Improved processing of finally blocks compiled with JDK 1.4 or older.
+<li>Fixed shrinking of access widening abstract methods, for the Dalvik VM.
+<li>Fixed overly aggressive shrinking of class annotations.
+<li>Fixed processing of unused classes in generic signatures.
+<li>Fixed merging of classes with similar class members.
+<li>Added java system property <code>optimize.conservatively</code> to allow
+    for instructions intentionally throwing <code>NullPointerException</code>,
+    <code>ArrayIndexOutOfBoundsException</code>, or
+    <code>ClassCastException</code> without other useful effects.
+<li>Fixed optimization of unnecessary variable initializations.
+<li>Fixed optimization of code involving NaN.
+<li>Fixed inlining of methods that are supposed to be kept.
+<li>Fixed preverification of artificially convoluted dup constructs.
+<li>Fixed quotes for java commands in .bat scripts.
+<li>Improved handling of non-sequential line number information.
+<li>Now requiring Java 5 or higher for running ProGuard.
+<li>Updated build files.
+<li>Updated documentation and examples.
+</ul>
+
+<h3><div>May 2012</div> Version 4.8</h3>
+<ul>
+<li>Added more peephole optimizations for strings.
+<li>Added support for multiple external configuration files in Ant
+    configurations.
+<li>Added support for Ant properties in external configuration files.
+<li>Fixed parsing of empty file filters on input and output.
+<li>Fixed parsing of '*' wildcard for file filters and name filters.
+<li>Fixed obfuscation of private methods that are overridden in concrete
+    classes with intermediary abstract classes and interfaces (workaround
+    for Oracle bugs #6691741 and #6684387).
+<li>Fixed optimization of complex finally blocks, compiled with JDK 1.4 or
+    earlier.
+<li>Fixed optimizing signatures of methods that are marked as not having
+    side effects.
+<li>Fixed optimization of long local variables possibly causing verification
+    error for register pairs.
+<li>Fixed merging of classes defined inside methods.
+<li>Fixed stack consistency in optimization step.
+<li>No longer removing debug information about unused parameters, for
+    <code>-keepparameternames</code> or <code>-keepattributes</code>.
+<li>Fixed updating manifest files with carriage return characters.
+<li>Now removing unreachable code in preverification step.
+<li>Improved default regular expression for stack traces in ReTrace.
+<li>Updated documentation and examples.
+</ul>
+
+<h3><div>Dec 2011</div> Version 4.7</h3>
+<ul>
+<li>Added support for Java 7.
+<li>Parsing unquoted file names with special characters more leniently.
+<li>Added support for instance methods overriding class methods.
+<li>Added removal of unused parameterless constructors.
+<li>Added removal of empty class initializers.
+<li>Added peephole optimizations for constant strings.
+<li>Avoiding idle optimization passes.
+<li>Improved removal of unused constants after obfuscation.
+<li>Fixed removal of unused classes referenced by annotations.
+<li>Fixed simplifying parameters of constructors that should actually be
+    preserved.
+<li>Fixed simplifying parameters of large numbers of similar constructors.
+<li>Fixed exceptions in optimization of unusual obfuscated code.
+<li>Fixed NullPointerException when specifying <code>-keepclassmembers</code>
+    without specific class or class members.
+<li>Fixed potential problems with mixed-case class name dictionaries when not
+    allowing mixed-case class names.
+<li>Fixed obfuscation of classes with EnclosingMethod attributes that don't
+    specify methods.
+<li>Fixed preverification of returning try blocks with finally blocks, inside
+    try blocks, when compiled with JDK 1.4.
+<li>Fixed sorting of interfaces containing generics.
+<li>Fixed paths in shell scripts.
+<li>Fixed filling in of text fields showing class obfuscation dictionary and
+    package obfuscation dictionary from configuration in GUI.
+<li>Worked around Oracle Java 6/7 bug #7027598 that locked the GUI on Linux.
+<li>Updated documentation and examples.
+</ul>
+
+<h3><div>Feb 2011</div> Version 4.6</h3>
+<ul>
+<li>Added support for synthetic, bridge, and varargs modifiers in configuration.
+<li>Added detection of atomic updater construction with constant arguments.
+<li>Fixed merging of package visible classes.
+<li>Fixed optimization of fields that are only accessed by reflection.
+<li>Fixed optimization of read-only or write-only fields that are volatile.
+<li>Fixed handling of side-effects due to static initializers.
+<li>Fixed handling of bridge flags in obfuscation step.
+<li>Fixed handling of super flag when merging classes.
+<li>Fixed updating of variable tables when optimizing variables.
+<li>Fixed removal of unused parameters with 32 or more parameters.
+<li>Fixed incorrect removal of exception handler for instanceof instruction.
+<li>Fixed inlining of methods with unusual exception handlers.
+<li>Fixed optimization of unusual code causing stack underflow.
+<li>Fixed keeping of constructor parameter names.
+<li>Fixed unwanted wrapping of non-standard META-INF files.
+<li>Fixed filtering of warnings about references to array types.
+<li>Fixed overriding of warning option and note option in Ant task.
+<li>Improved detection of file name extensions for canonical paths.
+<li>Improved printing of seeds specified by <code>-keep</code> options.
+<li>Improved printing of notes about unkept classes.
+<li>Improved checking whether output is up to date.
+<li>Updated documentation and examples.
+</ul>
+
+<h3><div>Jun 2010</div> Version 4.5</h3>
+<ul>
+<li>Added option <code>-keepparameternames</code>.
+<li><code>-dontskipnonpubliclibraryclasses</code> is now set by default. Added
+    <code>-skipnonpubliclibraryclasses</code> as an option.
+<li>Made processing independent of order of input classes to get even more
+    deterministic output.
+<li>Improved constant field propagation.
+<li>Improved renaming of resource files in subdirectories of packages.
+<li>Avoiding making fields in interfaces private.
+<li>Optimizing exception handlers for monitorexit instruction.
+<li>Reduced maximum allowed code length after inlining from 8000 bytes to
+    7000 bytes.
+<li>Fixed missing warnings about missing library classes.
+<li>Fixed shrinking of annotations with arrays of length 0.
+<li>Fixed handling of -0.0 and NaN values when simplifying expressions.
+<li>Fixed copying of exception handlers when simplifying tail recursion calls.
+<li>Fixed optimization of introspected fields.
+<li>Fixed simplification of unnecessary variable initializations.
+<li>Fixed evaluation of subroutines in pre-JDK 1.5 code.
+<li>Fixed updating of access flags in inner classes information.
+<li>Fixed disabling of field privatization.
+<li>Fixed invocations of privatized methods.
+<li>Fixed updating of local variable debug information in optimization step.
+<li>Fixed print settings without file name in GUI.
+<li>Fixed field privatization setting in GUI.
+<li>Fixed saving incorrectly quoted arguments in GUI.
+<li>Fixed handling of regular expressions with only negators.
+<li>Fixed unwanted wrapping of non-standard META-INF files.
+<li>Fixed regular expression pattern for constructors in ReTrace.
+<li>Updated documentation and examples.
+</ul>
 
 <h3><div>Jul 2009</div> Version 4.4</h3>
 <ul>
@@ -511,10 +690,11 @@ Upgrade considerations:
     <b>RetroGuard</b>.
 </ul>
 
-<hr>
+<hr />
+<noscript><div><a target="_top" href="index.html" class="button">Show menu</a></div></noscript>
 <address>
-Copyright &copy; 2002-2009
-<a href="http://www.graphics.cornell.edu/~eric/">Eric Lafortune</a>.
+Copyright &copy; 2002-2013
+<a target="other" href="http://www.lafortune.eu/">Eric Lafortune</a>.
 </address>
 
 </body>

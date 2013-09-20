@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -34,6 +34,19 @@ public class ClassVersionFilter implements ClassVisitor
     private final int          minimumClassVersion;
     private final int          maximumClassVersion;
     private final ClassVisitor classVisitor;
+
+
+    /**
+     * Creates a new ClassVersionFilter.
+     * @param minimumClassVersion the minimum class version number.
+     * @param classVisitor        the <code>ClassVisitor</code> to which visits
+     *                            will be delegated.
+     */
+    public ClassVersionFilter(int          minimumClassVersion,
+                              ClassVisitor classVisitor)
+    {
+        this(minimumClassVersion, Integer.MAX_VALUE, classVisitor);
+    }
 
 
     /**

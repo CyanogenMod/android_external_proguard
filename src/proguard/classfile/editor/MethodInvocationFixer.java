@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -28,7 +28,6 @@ import proguard.classfile.constant.visitor.ConstantVisitor;
 import proguard.classfile.instruction.*;
 import proguard.classfile.instruction.visitor.InstructionVisitor;
 import proguard.classfile.util.*;
-import proguard.classfile.visitor.*;
 
 /**
  * This AttributeVisitor fixes all inappropriate special/virtual/static/interface
@@ -40,9 +39,7 @@ public class MethodInvocationFixer
 extends      SimplifiedVisitor
 implements   AttributeVisitor,
              InstructionVisitor,
-             ConstantVisitor,
-             ClassVisitor,
-             MemberVisitor
+             ConstantVisitor
 {
     private static final boolean DEBUG = false;
 
@@ -88,7 +85,8 @@ implements   AttributeVisitor,
         clazz.constantPoolEntryAccept(constantIndex, this);
 
         // Did we find the called class and method?
-        if (referencedMethod != null)
+        if (referencedClass  != null &&
+            referencedMethod != null)
         {
             // Do we need to update the opcode?
             byte opcode = constantInstruction.opcode;
@@ -102,7 +100,7 @@ implements   AttributeVisitor,
                     // Replace the invocation by an invokestatic instruction.
                     Instruction replacementInstruction =
                         new ConstantInstruction(InstructionConstants.OP_INVOKESTATIC,
-                                                constantIndex).shrink();
+                                                constantIndex);
 
                     codeAttributeEditor.replaceInstruction(offset, replacementInstruction);
 
@@ -123,7 +121,7 @@ implements   AttributeVisitor,
                     // Replace the invocation by an invokespecial instruction.
                     Instruction replacementInstruction =
                         new ConstantInstruction(InstructionConstants.OP_INVOKESPECIAL,
-                                                constantIndex).shrink();
+                                                constantIndex);
 
                     codeAttributeEditor.replaceInstruction(offset, replacementInstruction);
 
@@ -149,7 +147,7 @@ implements   AttributeVisitor,
                     Instruction replacementInstruction =
                         new ConstantInstruction(InstructionConstants.OP_INVOKEINTERFACE,
                                                 constantIndex,
-                                                invokeinterfaceConstant).shrink();
+                                                invokeinterfaceConstant);
 
                     codeAttributeEditor.replaceInstruction(offset, replacementInstruction);
 
@@ -168,12 +166,13 @@ implements   AttributeVisitor,
                 // but not a super call)?
                 if (opcode != InstructionConstants.OP_INVOKEVIRTUAL &&
                     (opcode != InstructionConstants.OP_INVOKESPECIAL ||
+                     clazz.equals(referencedClass) ||
                      !clazz.extends_(referencedClass)))
                 {
                     // Replace the invocation by an invokevirtual instruction.
                     Instruction replacementInstruction =
                         new ConstantInstruction(InstructionConstants.OP_INVOKEVIRTUAL,
-                                                constantIndex).shrink();
+                                                constantIndex);
 
                     codeAttributeEditor.replaceInstruction(offset, replacementInstruction);
 
@@ -194,40 +193,30 @@ implements   AttributeVisitor,
 
     public void visitAnyMethodrefConstant(Clazz clazz, RefConstant refConstant)
     {
-        // Check if this is an interface method. Note that we're interested in
-        // the class of the method reference, not in the class in which the
-        // method was actually found.
-        //refConstant.referencedClassAccept(this);
-        clazz.constantPoolEntryAccept(refConstant.u2classIndex, this);
+        // Remember the referenced class. Note that we're interested in the
+        // class of the method reference, not in the class in which the
+        // method was actually found, unless it is an array type.
+        //
+        if (ClassUtil.isInternalArrayType(refConstant.getClassName(clazz)))
+        {
+            // For an array type, the class will be java.lang.Object.
+            referencedClass = refConstant.referencedClass;
+        }
+        else
+        {
+            clazz.constantPoolEntryAccept(refConstant.u2classIndex, this);
+        }
 
-        // Get the referenced access flags and names.
-        refConstant.referencedMemberAccept(this);
+        // Remember the referenced method.
+        referencedMethodClass = refConstant.referencedClass;
+        referencedMethod      = refConstant.referencedMember;
     }
 
 
     public void visitClassConstant(Clazz clazz, ClassConstant classConstant)
     {
-        // Check if this is an interface class.
-       classConstant.referencedClassAccept(this);
-    }
-
-
-    // Implementations for ClassVisitor.
-
-    public void visitAnyClass(Clazz clazz)
-    {
         // Remember the referenced class.
-        referencedClass = clazz;
-    }
-
-
-    // Implementations for MemberVisitor.
-
-    public void visitAnyMember(Clazz clazz, Member member)
-    {
-        // Remember the referenced method.
-        referencedMethodClass = clazz;
-        referencedMethod      = member;
+        referencedClass = classConstant.referencedClass;
     }
 
 
