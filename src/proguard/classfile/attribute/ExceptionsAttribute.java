@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -69,12 +69,12 @@ public class ExceptionsAttribute extends Attribute
      * Applies the given constant pool visitor to all exception class pool info
      * entries.
      */
-    public void exceptionEntriesAccept(ProgramClass programClass, ConstantVisitor constantVisitor)
+    public void exceptionEntriesAccept(Clazz clazz, ConstantVisitor constantVisitor)
     {
         for (int index = 0; index < u2exceptionIndexTableLength; index++)
         {
-            programClass.constantPoolEntryAccept(u2exceptionIndexTable[index],
-                                                 constantVisitor);
+            clazz.constantPoolEntryAccept(u2exceptionIndexTable[index],
+                                          constantVisitor);
         }
     }
 }

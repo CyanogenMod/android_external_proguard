@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -48,8 +48,9 @@ implements   ClassVisitor,
              ConstantVisitor,
              MemberVisitor,
              AttributeVisitor,
-             ExceptionInfoVisitor,
+             BootstrapMethodInfoVisitor,
              InnerClassesInfoVisitor,
+             ExceptionInfoVisitor,
              StackMapFrameVisitor,
              VerificationTypeVisitor,
              LineNumberInfoVisitor,
@@ -62,7 +63,8 @@ implements   ClassVisitor,
     private static final String INDENTATION = "  ";
 
     private final PrintStream ps;
-    private int         indentation;
+
+    private int indentation;
 
 
     /**
@@ -95,6 +97,7 @@ implements   ClassVisitor,
         println("Superclass:    " + programClass.getSuperName());
         println("Major version: 0x" + Integer.toHexString(ClassUtil.internalMajorClassVersion(programClass.u4version)));
         println("Minor version: 0x" + Integer.toHexString(ClassUtil.internalMinorClassVersion(programClass.u4version)));
+        println("  = target " + ClassUtil.externalClassVersion(programClass.u4version));
         println("Access flags:  0x" + Integer.toHexString(programClass.u2accessFlags));
         println("  = " +
                 ((programClass.u2accessFlags & ClassConstants.INTERNAL_ACC_ANNOTATTION) != 0 ? "@ " : "") +
@@ -222,10 +225,30 @@ implements   ClassVisitor,
     }
 
 
+    public void visitInvokeDynamicConstant(Clazz clazz, InvokeDynamicConstant invokeDynamicConstant)
+    {
+        println(visitorInfo(invokeDynamicConstant) + " InvokeDynamic [bootstrap method index = " + invokeDynamicConstant.u2bootstrapMethodAttributeIndex + "]:");
+
+        indent();
+        clazz.constantPoolEntryAccept(invokeDynamicConstant.u2nameAndTypeIndex, this);
+        outdent();
+    }
+
+
+    public void visitMethodHandleConstant(Clazz clazz, MethodHandleConstant methodHandleConstant)
+    {
+        println(visitorInfo(methodHandleConstant) + " MethodHandle [kind = " + methodHandleConstant.u1referenceKind + "]:");
+
+        indent();
+        clazz.constantPoolEntryAccept(methodHandleConstant.u2referenceIndex, this);
+        outdent();
+    }
+
+
     public void visitFieldrefConstant(Clazz clazz, FieldrefConstant fieldrefConstant)
     {
         println(visitorInfo(fieldrefConstant) + " Fieldref [" +
-                clazz.getClassName(fieldrefConstant.u2classIndex)  + "." +
+                clazz.getClassName(fieldrefConstant.u2classIndex) + "." +
                 clazz.getName(fieldrefConstant.u2nameAndTypeIndex) + " " +
                 clazz.getType(fieldrefConstant.u2nameAndTypeIndex) + "]");
     }
@@ -253,6 +276,13 @@ implements   ClassVisitor,
     {
         println(visitorInfo(classConstant) + " Class [" +
                 clazz.getString(classConstant.u2nameIndex) + "]");
+    }
+
+
+    public void visitMethodTypeConstant(Clazz clazz, MethodTypeConstant methodTypeConstant)
+    {
+        println(visitorInfo(methodTypeConstant) + " MethodType [" +
+                clazz.getString(methodTypeConstant.u2descriptorIndex) + "]");
     }
 
 
@@ -358,6 +388,17 @@ implements   ClassVisitor,
     {
         println(visitorInfo(unknownAttribute) +
                 " Unknown attribute (" + clazz.getString(unknownAttribute.u2attributeNameIndex) + ")");
+    }
+
+
+    public void visitBootstrapMethodsAttribute(Clazz clazz, BootstrapMethodsAttribute bootstrapMethodsAttribute)
+    {
+        println(visitorInfo(bootstrapMethodsAttribute) +
+                " Bootstrap methods attribute (count = " + bootstrapMethodsAttribute.u2bootstrapMethodsCount + "):");
+
+        indent();
+        bootstrapMethodsAttribute.bootstrapMethodEntriesAccept(clazz, this);
+        outdent();
     }
 
 
@@ -595,6 +636,21 @@ implements   ClassVisitor,
     }
 
 
+    // Implementations for BootstrapMethodInfoVisitor.
+
+    public void visitBootstrapMethodInfo(Clazz clazz, BootstrapMethodInfo bootstrapMethodInfo)
+    {
+        println(visitorInfo(bootstrapMethodInfo) +
+                " BootstrapMethodInfo (argument count = " +
+                bootstrapMethodInfo.u2methodArgumentCount+ "):");
+
+        indent();
+        clazz.constantPoolEntryAccept(bootstrapMethodInfo.u2methodHandleIndex, this);
+        bootstrapMethodInfo.methodArgumentsAccept(clazz, this);
+        outdent();
+    }
+
+
     // Implementations for InnerClassesInfoVisitor.
 
     public void visitInnerClassesInfo(Clazz clazz, InnerClassesInfo innerClassesInfo)
@@ -603,6 +659,8 @@ implements   ClassVisitor,
                 " InnerClassesInfo:");
 
         indent();
+        println("Access flags:  0x" + Integer.toHexString(innerClassesInfo.u2innerClassAccessFlags) + " = " +
+                ClassUtil.externalClassAccessFlags(innerClassesInfo.u2innerClassAccessFlags));
         innerClassesInfo.innerClassConstantAccept(clazz, this);
         innerClassesInfo.outerClassConstantAccept(clazz, this);
         innerClassesInfo.innerNameConstantAccept(clazz, this);
@@ -816,7 +874,7 @@ implements   ClassVisitor,
 
     public void visitLocalVariableInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, LocalVariableInfo localVariableInfo)
     {
-        println("#" + localVariableInfo.u2index + ": " +
+        println("v" + localVariableInfo.u2index + ": " +
                 localVariableInfo.u2startPC + " -> " +
                 (localVariableInfo.u2startPC + localVariableInfo.u2length) + " [" +
                 clazz.getString(localVariableInfo.u2descriptorIndex) + " " +
@@ -828,7 +886,7 @@ implements   ClassVisitor,
 
     public void visitLocalVariableTypeInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, LocalVariableTypeInfo localVariableTypeInfo)
     {
-        println("#" + localVariableTypeInfo.u2index + ": " +
+        println("v" + localVariableTypeInfo.u2index + ": " +
                 localVariableTypeInfo.u2startPC + " -> " +
                 (localVariableTypeInfo.u2startPC + localVariableTypeInfo.u2length) + " [" +
                 clazz.getString(localVariableTypeInfo.u2signatureIndex) + " " +

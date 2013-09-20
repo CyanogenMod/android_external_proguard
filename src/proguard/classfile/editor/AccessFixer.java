@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -21,6 +21,8 @@
 package proguard.classfile.editor;
 
 import proguard.classfile.*;
+import proguard.classfile.attribute.*;
+import proguard.classfile.attribute.visitor.*;
 import proguard.classfile.constant.*;
 import proguard.classfile.constant.visitor.ConstantVisitor;
 import proguard.classfile.util.*;
@@ -61,12 +63,26 @@ implements   ConstantVisitor,
     }
 
 
+    public void visitInvokeDynamicConstant(Clazz clazz, InvokeDynamicConstant invokeDynamicConstant)
+    {
+        // Check the bootstrap method.
+        invokeDynamicConstant.bootstrapMethodHandleAccept(clazz, this);
+    }
+
+
+    public void visitMethodHandleConstant(Clazz clazz, MethodHandleConstant methodHandleConstant)
+    {
+        // Check the method reference.
+        clazz.constantPoolEntryAccept(methodHandleConstant.u2referenceIndex, this);
+    }
+
+
     public void visitAnyRefConstant(Clazz clazz, RefConstant refConstant)
     {
         referencingClass = clazz;
 
         // Remember the specified class, since it might be different from
-        // the referenced class that acutally contains the class member.
+        // the referenced class that actually contains the class member.
         clazz.constantPoolEntryAccept(refConstant.u2classIndex, referencedClassFinder);
 
         // Make sure the access flags of the referenced class member are
@@ -91,8 +107,8 @@ implements   ConstantVisitor,
 
     public void visitProgramClass(ProgramClass programClass)
     {
-        int currentAccessFlags  = programClass.getAccessFlags();
-        int currentAccessLevel  = AccessUtil.accessLevel(currentAccessFlags);
+        int currentAccessFlags = programClass.getAccessFlags();
+        int currentAccessLevel = AccessUtil.accessLevel(currentAccessFlags);
 
         // Compute the required access level.
         Clazz referencingClass = this.referencingClass;
@@ -117,8 +133,8 @@ implements   ConstantVisitor,
 
     public void visitProgramMember(ProgramClass programClass, ProgramMember programMember)
     {
-        int currentAccessFlags  = programMember.getAccessFlags();
-        int currentAccessLevel  = AccessUtil.accessLevel(currentAccessFlags);
+        int currentAccessFlags = programMember.getAccessFlags();
+        int currentAccessLevel = AccessUtil.accessLevel(currentAccessFlags);
 
         // Compute the required access level.
         int requiredAccessLevel =

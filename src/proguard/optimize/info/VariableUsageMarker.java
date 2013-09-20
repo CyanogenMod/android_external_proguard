@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -26,6 +26,8 @@ import proguard.classfile.attribute.visitor.AttributeVisitor;
 import proguard.classfile.instruction.*;
 import proguard.classfile.instruction.visitor.InstructionVisitor;
 import proguard.classfile.util.SimplifiedVisitor;
+
+import java.util.Arrays;
 
 /**
  * This AttributeVisitor marks the local variables that are used in the code
@@ -62,14 +64,13 @@ implements   AttributeVisitor,
         // Try to reuse the previous array.
         if (variableUsed.length < maxLocals)
         {
+            // Create a new array.
             variableUsed = new boolean[maxLocals];
         }
         else
         {
-            for (int index = 0; index < maxLocals; index++)
-            {
-                variableUsed[index] = false;
-            }
+            // Reset the array.
+            Arrays.fill(variableUsed, 0, maxLocals, false);
         }
 
         codeAttribute.instructionsAccept(clazz, method, this);

@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -25,6 +25,8 @@ import proguard.classfile.attribute.*;
 import proguard.classfile.attribute.visitor.AttributeVisitor;
 import proguard.classfile.util.SimplifiedVisitor;
 import proguard.classfile.visitor.*;
+
+import java.util.Arrays;
 
 /**
  * This ClassVisitor removes attributes that are not marked as being used or
@@ -111,10 +113,7 @@ implements   ClassVisitor,
         }
 
         // Clear the remaining array elements.
-        for (int index = counter; index < length; index++)
-        {
-            array[index] = null;
-        }
+        Arrays.fill(array, counter, length, null);
 
         return counter;
     }

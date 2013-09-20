@@ -52,6 +52,11 @@ td
   padding: 8px;
 }
 
+ul.spacious li
+{
+  padding: 8px;
+}
+
 a
 {
   text-decoration: none;
@@ -62,13 +67,21 @@ img
   border: none;
 }
 
+a.button {
+  color: #000000;
+  text-decoration: none;
+  background: #E0E0E0;
+  border: 1px outset #FFFFFF;
+  float: right;
+}
+
 /* Settings for the introductory paragraph. */
 
 p.intro
 {
   background: #EEEEFF;
   padding: 10px;
-  border: solid #000000 1px
+  border: 1px solid #000000;
 }
 
 /* Settings for the title frame. */
@@ -115,6 +128,7 @@ body.navigation
 {
   margin: 0px;
   padding: 0px;
+  background: #F8F8F8;
 }
 
 ul.navigation
