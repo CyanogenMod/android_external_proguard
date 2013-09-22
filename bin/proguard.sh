@@ -9,4 +9,4 @@
 
 PROGUARD_HOME=`dirname "$0"`/..
 
-java -jar "$PROGUARD_HOME/lib/proguard.jar" "$@"
+java -Xmx512M  -jar "$PROGUARD_HOME/lib/proguard.jar" "$@"
