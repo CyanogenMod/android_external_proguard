@@ -7,19 +7,15 @@
 
 # Specify the input jars, output jars, and library jars.
 # The input jars will be merged in a single output jar.
-# We'll filter out the Ant and WTK classes.
+# We'll filter out the Ant classes, Gradle classes, and WTK classes, keeping
+# everything else.
 
 -injars  ../lib/proguardgui.jar
--injars  ../lib/proguard.jar(!META-INF/**,!proguard/ant/**,!proguard/wtk/**)
+-injars  ../lib/proguard.jar(!META-INF/**,!proguard/ant/**,!proguard/gradle/**,!proguard/wtk/**)
 -injars  ../lib/retrace.jar (!META-INF/**)
 -outjars proguardgui_out.jar
 
 -libraryjars <java.home>/lib/rt.jar
-
-# In recent JREs, some public Swing classes depend on package visible classes,
-# so don't skip these package visible classes while parsing the library jar.
-
--dontskipnonpubliclibraryclasses
 
 # If we wanted to reuse the previously obfuscated proguard_out.jar, we could
 # perform incremental obfuscation based on its mapping file, and only keep the

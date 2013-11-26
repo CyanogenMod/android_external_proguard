@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -51,13 +51,13 @@ implements   ClassVisitor,
              AnnotationVisitor,
              ElementValueVisitor
 {
+    private static final boolean DEBUG = false;
+
+
     // Implementations for ClassVisitor.
 
     public void visitProgramClass(ProgramClass programClass)
     {
-        Clazz   superClass       = null;
-        Clazz[] interfaceClasses = null;
-
         // Change the references of the constant pool.
         programClass.constantPoolEntriesAccept(this);
 
@@ -80,34 +80,39 @@ implements   ClassVisitor,
                                     programClass.getName(),
                                     programClass);
 
+            // This class will loose all its interfaces.
+            programClass.u2interfacesCount = 0;
+
             // This class will loose all its subclasses.
             programClass.subClasses = null;
         }
-
-        // Remove interface classes that are pointing to this class.
-        int newInterfacesCount = 0;
-        for (int index = 0; index < programClass.u2interfacesCount; index++)
+        else
         {
-            Clazz interfaceClass = programClass.getInterface(index);
-            if (!programClass.equals(interfaceClass))
+            // Remove interface classes that are pointing to this class.
+            int newInterfacesCount = 0;
+            for (int index = 0; index < programClass.u2interfacesCount; index++)
             {
-                programClass.u2interfaces[newInterfacesCount++] =
-                    programClass.u2interfaces[index];
+                Clazz interfaceClass = programClass.getInterface(index);
+                if (!programClass.equals(interfaceClass))
+                {
+                    programClass.u2interfaces[newInterfacesCount++] =
+                        programClass.u2interfaces[index];
+                }
             }
+            programClass.u2interfacesCount = newInterfacesCount;
+
+            // Update the subclasses of the superclass and interfaces of the
+            // target class.
+            ConstantVisitor subclassAdder =
+                new ReferencedClassVisitor(
+                new SubclassFilter(programClass,
+                new SubclassAdder(programClass)));
+
+            programClass.superClassConstantAccept(subclassAdder);
+            programClass.interfaceConstantsAccept(subclassAdder);
+
+            // TODO: Maybe restore private method references.
         }
-        programClass.u2interfacesCount = newInterfacesCount;
-
-        // Update the subclasses of the superclass and interfaces of the
-        // target class.
-        ConstantVisitor subclassAdder =
-            new ReferencedClassVisitor(
-            new SubclassFilter(programClass,
-            new SubclassAdder(programClass)));
-
-        programClass.superClassConstantAccept(subclassAdder);
-        programClass.interfaceConstantsAccept(subclassAdder);
-
-        // TODO: Maybe restore private method references.
     }
 
 
@@ -188,6 +193,12 @@ implements   ClassVisitor,
         Clazz newReferencedClass = updateReferencedClass(referencedClass);
         if (referencedClass != newReferencedClass)
         {
+            if (DEBUG)
+            {
+                System.out.println("TargetClassChanger:");
+                System.out.println("  ["+clazz.getName()+"] changing reference from ["+refConstant.referencedClass+"."+refConstant.referencedMember.getName(refConstant.referencedClass)+refConstant.referencedMember.getDescriptor(refConstant.referencedClass)+"]");
+            }
+
             // Change the referenced class.
             refConstant.referencedClass  = newReferencedClass;
 
@@ -197,6 +208,11 @@ implements   ClassVisitor,
                                        refConstant.getName(clazz),
                                        refConstant.getType(clazz),
                                        newReferencedClass);
+
+            if (DEBUG)
+            {
+                System.out.println("  ["+clazz.getName()+"]                    to   ["+refConstant.referencedClass+"."+refConstant.referencedMember.getName(refConstant.referencedClass)+refConstant.referencedMember.getDescriptor(refConstant.referencedClass)+"]");
+            }
         }
     }
 

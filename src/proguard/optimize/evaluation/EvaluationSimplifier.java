@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -43,17 +43,20 @@ extends      SimplifiedVisitor
 implements   AttributeVisitor,
              InstructionVisitor
 {
+    private static final int  POS_ZERO_FLOAT_BITS  = Float.floatToIntBits(0.0f);
+    private static final long POS_ZERO_DOUBLE_BITS = Double.doubleToLongBits(0.0);
+
     //*
     private static final boolean DEBUG = false;
     /*/
-    private static boolean DEBUG       = true;
+    private static       boolean DEBUG = true;
     //*/
 
     private final InstructionVisitor extraInstructionVisitor;
 
     private final PartialEvaluator             partialEvaluator;
-    private final SideEffectInstructionChecker sideEffectInstructionChecker = new SideEffectInstructionChecker(true);
-    private final CodeAttributeEditor          codeAttributeEditor          = new CodeAttributeEditor(false);
+    private final SideEffectInstructionChecker sideEffectInstructionChecker = new SideEffectInstructionChecker(true, true);
+    private final CodeAttributeEditor          codeAttributeEditor          = new CodeAttributeEditor(false, true);
 
 
     /**
@@ -426,8 +429,9 @@ implements   AttributeVisitor,
         Value pushedValue = partialEvaluator.getStackAfter(offset).getTop(0);
         if (pushedValue.isParticular())
         {
+            // Push a constant instead.
             int value = pushedValue.integerValue().value();
-            if (value << 16 >> 16 == value)
+            if ((short)value == value)
             {
                 replaceConstantPushInstruction(clazz,
                                                offset,
@@ -442,13 +446,14 @@ implements   AttributeVisitor,
 
                 Instruction replacementInstruction =
                     new ConstantInstruction(InstructionConstants.OP_LDC,
-                                            constantPoolEditor.addIntegerConstant(value)).shrink();
+                                            constantPoolEditor.addIntegerConstant(value));
 
                 replaceInstruction(clazz, offset, instruction, replacementInstruction);
             }
         }
         else if (pushedValue.isSpecific())
         {
+            // Load an equivalent lower-numbered variable instead, if any.
             TracedVariables variables = partialEvaluator.getVariablesBefore(offset);
             for (int variableIndex = 0; variableIndex < maxVariableIndex; variableIndex++)
             {
@@ -459,6 +464,7 @@ implements   AttributeVisitor,
                                                    instruction,
                                                    InstructionConstants.OP_ILOAD,
                                                    variableIndex);
+                    break;
                 }
             }
         }
@@ -492,6 +498,7 @@ implements   AttributeVisitor,
         Value pushedValue = partialEvaluator.getStackAfter(offset).getTop(0);
         if (pushedValue.isParticular())
         {
+            // Push a constant instead.
             long value = pushedValue.longValue().value();
             if (value == 0L ||
                 value == 1L)
@@ -509,17 +516,21 @@ implements   AttributeVisitor,
 
                 Instruction replacementInstruction =
                     new ConstantInstruction(InstructionConstants.OP_LDC2_W,
-                                            constantPoolEditor.addLongConstant(value)).shrink();
+                                            constantPoolEditor.addLongConstant(value));
 
                 replaceInstruction(clazz, offset, instruction, replacementInstruction);
             }
         }
         else if (pushedValue.isSpecific())
         {
+            // Load an equivalent lower-numbered variable instead, if any.
             TracedVariables variables = partialEvaluator.getVariablesBefore(offset);
             for (int variableIndex = 0; variableIndex < maxVariableIndex; variableIndex++)
             {
-                if (pushedValue.equals(variables.load(variableIndex)))
+                // Note that we have to check the second part as well.
+                if (pushedValue.equals(variables.load(variableIndex)) &&
+                    variables.load(variableIndex + 1) != null         &&
+                    variables.load(variableIndex + 1).computationalType() == Value.TYPE_TOP)
                 {
                     replaceVariablePushInstruction(clazz,
                                                    offset,
@@ -559,10 +570,12 @@ implements   AttributeVisitor,
         Value pushedValue = partialEvaluator.getStackAfter(offset).getTop(0);
         if (pushedValue.isParticular())
         {
+            // Push a constant instead.
+            // Make sure to distinguish between +0.0 and -0.0.
             float value = pushedValue.floatValue().value();
-            if (value == 0f ||
-                value == 1f ||
-                value == 2f)
+            if (value == 0.0f && Float.floatToIntBits(value) == POS_ZERO_FLOAT_BITS ||
+                value == 1.0f ||
+                value == 2.0f)
             {
                 replaceConstantPushInstruction(clazz,
                                                offset,
@@ -577,13 +590,14 @@ implements   AttributeVisitor,
 
                 Instruction replacementInstruction =
                     new ConstantInstruction(InstructionConstants.OP_LDC,
-                                            constantPoolEditor.addFloatConstant(value)).shrink();
+                                            constantPoolEditor.addFloatConstant(value));
 
                 replaceInstruction(clazz, offset, instruction, replacementInstruction);
             }
         }
         else if (pushedValue.isSpecific())
         {
+            // Load an equivalent lower-numbered variable instead, if any.
             TracedVariables variables = partialEvaluator.getVariablesBefore(offset);
             for (int variableIndex = 0; variableIndex < maxVariableIndex; variableIndex++)
             {
@@ -627,8 +641,10 @@ implements   AttributeVisitor,
         Value pushedValue = partialEvaluator.getStackAfter(offset).getTop(0);
         if (pushedValue.isParticular())
         {
+            // Push a constant instead.
+            // Make sure to distinguish between +0.0 and -0.0.
             double value = pushedValue.doubleValue().value();
-            if (value == 0.0 ||
+            if (value == 0.0 && Double.doubleToLongBits(value) == POS_ZERO_DOUBLE_BITS ||
                 value == 1.0)
             {
                 replaceConstantPushInstruction(clazz,
@@ -644,17 +660,21 @@ implements   AttributeVisitor,
 
                 Instruction replacementInstruction =
                     new ConstantInstruction(InstructionConstants.OP_LDC2_W,
-                                            constantPoolEditor.addDoubleConstant(value)).shrink();
+                                            constantPoolEditor.addDoubleConstant(value));
 
                 replaceInstruction(clazz, offset, instruction, replacementInstruction);
             }
         }
         else if (pushedValue.isSpecific())
         {
+            // Load an equivalent lower-numbered variable instead, if any.
             TracedVariables variables = partialEvaluator.getVariablesBefore(offset);
             for (int variableIndex = 0; variableIndex < maxVariableIndex; variableIndex++)
             {
-                if (pushedValue.equals(variables.load(variableIndex)))
+                // Note that we have to check the second part as well.
+                if (pushedValue.equals(variables.load(variableIndex)) &&
+                    variables.load(variableIndex + 1) != null         &&
+                    variables.load(variableIndex + 1).computationalType() == Value.TYPE_TOP)
                 {
                     replaceVariablePushInstruction(clazz,
                                                    offset,
@@ -699,7 +719,7 @@ implements   AttributeVisitor,
                                                 int         value)
     {
         Instruction replacementInstruction =
-            new SimpleInstruction(replacementOpcode, value).shrink();
+            new SimpleInstruction(replacementOpcode, value);
 
         replaceInstruction(clazz, offset, instruction, replacementInstruction);
     }
@@ -716,7 +736,7 @@ implements   AttributeVisitor,
                                                 int         variableIndex)
     {
         Instruction replacementInstruction =
-            new VariableInstruction(replacementOpcode, variableIndex).shrink();
+            new VariableInstruction(replacementOpcode, variableIndex);
 
         replaceInstruction(clazz, offset, instruction, replacementInstruction);
     }
@@ -794,8 +814,8 @@ implements   AttributeVisitor,
             {
                 // Replace the branch instruction by a simple branch instruction.
                 Instruction replacementInstruction =
-                    new BranchInstruction(InstructionConstants.OP_GOTO_W,
-                                          branchOffset).shrink();
+                    new BranchInstruction(InstructionConstants.OP_GOTO,
+                                          branchOffset);
 
                 replaceInstruction(clazz, offset, instruction, replacementInstruction);
             }

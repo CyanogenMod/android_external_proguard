@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -213,22 +213,22 @@ public interface InstructionConstants
     public static final byte OP_INVOKESPECIAL   = -73;
     public static final byte OP_INVOKESTATIC    = -72;
     public static final byte OP_INVOKEINTERFACE = -71;
-//  public static final byte OP_UNUSED           = -70;
-    public static final byte OP_NEW            = -69;
-    public static final byte OP_NEWARRAY       = -68;
-    public static final byte OP_ANEWARRAY      = -67;
-    public static final byte OP_ARRAYLENGTH    = -66;
-    public static final byte OP_ATHROW         = -65;
-    public static final byte OP_CHECKCAST      = -64;
-    public static final byte OP_INSTANCEOF     = -63;
-    public static final byte OP_MONITORENTER   = -62;
-    public static final byte OP_MONITOREXIT    = -61;
-    public static final byte OP_WIDE           = -60;
-    public static final byte OP_MULTIANEWARRAY = -59;
-    public static final byte OP_IFNULL         = -58;
-    public static final byte OP_IFNONNULL      = -57;
-    public static final byte OP_GOTO_W         = -56;
-    public static final byte OP_JSR_W          = -55;
+    public static final byte OP_INVOKEDYNAMIC   = -70;
+    public static final byte OP_NEW             = -69;
+    public static final byte OP_NEWARRAY        = -68;
+    public static final byte OP_ANEWARRAY       = -67;
+    public static final byte OP_ARRAYLENGTH     = -66;
+    public static final byte OP_ATHROW          = -65;
+    public static final byte OP_CHECKCAST       = -64;
+    public static final byte OP_INSTANCEOF      = -63;
+    public static final byte OP_MONITORENTER    = -62;
+    public static final byte OP_MONITOREXIT     = -61;
+    public static final byte OP_WIDE            = -60;
+    public static final byte OP_MULTIANEWARRAY  = -59;
+    public static final byte OP_IFNULL          = -58;
+    public static final byte OP_IFNONNULL       = -57;
+    public static final byte OP_GOTO_W          = -56;
+    public static final byte OP_JSR_W           = -55;
 
 
     public static final String[] NAMES =
@@ -419,7 +419,7 @@ public interface InstructionConstants
         "invokespecial",
         "invokestatic",
         "invokeinterface",
-        "unused",
+        "invokedynamic",
         "new",
         "newarray",
         "anewarray",

@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -64,17 +64,26 @@ public class DataEntryCopier implements DataEntryReader
                 {
                     InputStream inputStream = dataEntry.getInputStream();
 
-                    // Copy the data from the input entry to the output entry.
-                    copyData(inputStream, outputStream);
-
-                    // Close the data entries.
-                    dataEntry.closeInputStream();
+                    try
+                    {
+                        // Copy the data from the input entry to the output entry.
+                        copyData(inputStream, outputStream);
+                    }
+                    finally
+                    {
+                        // Close the data entries.
+                        dataEntry.closeInputStream();
+                    }
                 }
             }
         }
         catch (IOException ex)
         {
             System.err.println("Warning: can't write resource [" + dataEntry.getName() + "] (" + ex.getMessage() + ")");
+        }
+        catch (Exception ex)
+        {
+            throw (IOException)new IOException("Can't write resource ["+dataEntry.getName()+"] ("+ex.getMessage()+")").initCause(ex);
         }
     }
 

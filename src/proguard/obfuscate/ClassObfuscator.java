@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -161,6 +161,14 @@ implements   ClassVisitor,
 
             setNewClassName(programClass, newClassName);
         }
+    }
+
+
+    public void visitLibraryClass(LibraryClass libraryClass)
+    {
+        // This can happen for dubious input, if the outer class of a program
+        // class is a library class, and its name is requested.
+        newClassName = libraryClass.getName();
     }
 
 
@@ -469,13 +477,25 @@ implements   ClassVisitor,
     {
         // Come up with class names until we get an original one.
         String newClassName;
+        String newMixedCaseClassName;
         do
         {
             // Let the factory produce a class name.
             newClassName = newPackagePrefix +
                            classNameFactory.nextName();
+
+            newMixedCaseClassName = mixedCaseClassName(newClassName);
         }
-        while (classNamesToAvoid.contains(mixedCaseClassName(newClassName)));
+        while (classNamesToAvoid.contains(newMixedCaseClassName));
+
+        // Explicitly make sure the name isn't used again if we have a
+        // user-specified dictionary and we're not allowed to have mixed case
+        // class names -- just to protect against problematic dictionaries.
+        if (this.classNameFactory != null &&
+            !useMixedCaseClassNames)
+        {
+            classNamesToAvoid.add(newMixedCaseClassName);
+        }
 
         return newClassName;
     }
