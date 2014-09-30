@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -84,8 +84,9 @@ implements   InstructionVisitor
             int branchOffset = branchInstruction.branchOffset;
             int targetOffset = offset + branchOffset;
 
-            if (branchOffset != branchInstruction.length(offset) &&
-                !codeAttributeEditor.isModified(offset) &&
+            if (branchOffset != 0                                &&
+                branchOffset != branchInstruction.length(offset) &&
+                !codeAttributeEditor.isModified(offset)          &&
                 !codeAttributeEditor.isModified(targetOffset))
             {
                 Instruction targetInstruction =

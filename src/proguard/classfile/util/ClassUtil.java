@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -100,6 +100,8 @@ public class ClassUtil
             classVersion.equals(ClassConstants.EXTERNAL_CLASS_VERSION_1_5) ? ClassConstants.INTERNAL_CLASS_VERSION_1_5 :
             classVersion.equals(ClassConstants.EXTERNAL_CLASS_VERSION_1_6_ALIAS) ||
             classVersion.equals(ClassConstants.EXTERNAL_CLASS_VERSION_1_6) ? ClassConstants.INTERNAL_CLASS_VERSION_1_6 :
+            classVersion.equals(ClassConstants.EXTERNAL_CLASS_VERSION_1_7_ALIAS) ||
+            classVersion.equals(ClassConstants.EXTERNAL_CLASS_VERSION_1_7) ? ClassConstants.INTERNAL_CLASS_VERSION_1_7 :
                                                                              0;
     }
 
@@ -119,6 +121,7 @@ public class ClassUtil
             case ClassConstants.INTERNAL_CLASS_VERSION_1_4: return ClassConstants.EXTERNAL_CLASS_VERSION_1_4;
             case ClassConstants.INTERNAL_CLASS_VERSION_1_5: return ClassConstants.EXTERNAL_CLASS_VERSION_1_5;
             case ClassConstants.INTERNAL_CLASS_VERSION_1_6: return ClassConstants.EXTERNAL_CLASS_VERSION_1_6;
+            case ClassConstants.INTERNAL_CLASS_VERSION_1_7: return ClassConstants.EXTERNAL_CLASS_VERSION_1_7;
             default:                                        return null;
         }
     }
@@ -132,11 +135,14 @@ public class ClassUtil
     public static void checkVersionNumbers(int classVersion) throws UnsupportedOperationException
     {
         if (classVersion < ClassConstants.INTERNAL_CLASS_VERSION_1_0 ||
-            classVersion > ClassConstants.INTERNAL_CLASS_VERSION_1_6)
+            classVersion > ClassConstants.INTERNAL_CLASS_VERSION_1_7)
         {
-            throw new UnsupportedOperationException("Unsupported version number ["+
+            throw new UnsupportedOperationException("Unsupported class version number ["+
                                                     internalMajorClassVersion(classVersion)+"."+
-                                                    internalMinorClassVersion(classVersion)+"] for class format");
+                                                    internalMinorClassVersion(classVersion)+"] (maximum "+
+                                                    ClassConstants.INTERNAL_CLASS_VERSION_1_7_MAJOR+"."+
+                                                    ClassConstants.INTERNAL_CLASS_VERSION_1_7_MINOR+", Java "+
+                                                    ClassConstants.EXTERNAL_CLASS_VERSION_1_7+")");
         }
     }
 
@@ -189,8 +195,25 @@ public class ClassUtil
 
 
     /**
-     * Converts an internal class name into an external short class name, without
-     * package specification.
+     * Returns the external base type of an external array type, dropping any
+     * array brackets.
+     * @param externalArrayType the external array type,
+     *                          e.g. "<code>java.lang.Object[][]</code>"
+     * @return the external base type,
+     *                          e.g. "<code>java.lang.Object</code>".
+     */
+    public static String externalBaseType(String externalArrayType)
+    {
+        int index = externalArrayType.indexOf(ClassConstants.EXTERNAL_TYPE_ARRAY);
+        return index >= 0 ?
+            externalArrayType.substring(0, index) :
+            externalArrayType;
+    }
+
+
+    /**
+     * Returns the external short class name of an external class name, dropping
+     * the package specification.
      * @param externalClassName the external class name,
      *                          e.g. "<code>java.lang.Object</code>"
      * @return the external short class name,
@@ -406,6 +429,21 @@ public class ClassUtil
         }
 
         return internalClassNameFromClassType(internalClassType);
+    }
+
+
+    /**
+     * Returns whether the given method name refers to a class initializer or
+     * an instance initializer.
+     * @param internalMethodName the internal method name,
+     *                           e.g. "<code>&ltclinit&gt;</code>".
+     * @return whether the method name refers to an initializer,
+     *                           e.g. <code>true</code>.
+     */
+    public static boolean isInitializer(String internalMethodName)
+    {
+        return internalMethodName.equals(ClassConstants.INTERNAL_METHOD_NAME_CLINIT) ||
+               internalMethodName.equals(ClassConstants.INTERNAL_METHOD_NAME_INIT);
     }
 
 
@@ -869,6 +907,21 @@ public class ClassUtil
         {
             string.append(prefix).append(ClassConstants.EXTERNAL_ACC_PUBLIC).append(' ');
         }
+        if ((accessFlags & ClassConstants.INTERNAL_ACC_PRIVATE) != 0)
+        {
+            // Only in InnerClasses attributes.
+            string.append(prefix).append(ClassConstants.EXTERNAL_ACC_PRIVATE).append(' ');
+        }
+        if ((accessFlags & ClassConstants.INTERNAL_ACC_PROTECTED) != 0)
+        {
+            // Only in InnerClasses attributes.
+            string.append(prefix).append(ClassConstants.EXTERNAL_ACC_PROTECTED).append(' ');
+        }
+        if ((accessFlags & ClassConstants.INTERNAL_ACC_STATIC) != 0)
+        {
+            // Only in InnerClasses attributes.
+            string.append(prefix).append(ClassConstants.EXTERNAL_ACC_STATIC).append(' ');
+        }
         if ((accessFlags & ClassConstants.INTERNAL_ACC_FINAL) != 0)
         {
             string.append(prefix).append(ClassConstants.EXTERNAL_ACC_FINAL).append(' ');
@@ -888,6 +941,10 @@ public class ClassUtil
         else if ((accessFlags & ClassConstants.INTERNAL_ACC_ABSTRACT) != 0)
         {
             string.append(prefix).append(ClassConstants.EXTERNAL_ACC_ABSTRACT).append(' ');
+        }
+        else if ((accessFlags & ClassConstants.INTERNAL_ACC_SYNTHETIC) != 0)
+        {
+            string.append(prefix).append(ClassConstants.EXTERNAL_ACC_SYNTHETIC).append(' ');
         }
 
         return string.toString();
@@ -950,6 +1007,10 @@ public class ClassUtil
         {
             string.append(prefix).append(ClassConstants.EXTERNAL_ACC_TRANSIENT).append(' ');
         }
+        if ((accessFlags & ClassConstants.INTERNAL_ACC_SYNTHETIC) != 0)
+        {
+            string.append(prefix).append(ClassConstants.EXTERNAL_ACC_SYNTHETIC).append(' ');
+        }
 
         return string.toString();
     }
@@ -1007,6 +1068,14 @@ public class ClassUtil
         {
             string.append(prefix).append(ClassConstants.EXTERNAL_ACC_SYNCHRONIZED).append(' ');
         }
+        if ((accessFlags & ClassConstants.INTERNAL_ACC_BRIDGE) != 0)
+        {
+            string.append(prefix).append(ClassConstants.EXTERNAL_ACC_BRIDGE).append(' ');
+        }
+        if ((accessFlags & ClassConstants.INTERNAL_ACC_VARARGS) != 0)
+        {
+            string.append(prefix).append(ClassConstants.EXTERNAL_ACC_VARARGS).append(' ');
+        }
         if ((accessFlags & ClassConstants.INTERNAL_ACC_NATIVE) != 0)
         {
             string.append(prefix).append(ClassConstants.EXTERNAL_ACC_NATIVE).append(' ');
@@ -1018,6 +1087,10 @@ public class ClassUtil
         if ((accessFlags & ClassConstants.INTERNAL_ACC_STRICT) != 0)
         {
             string.append(prefix).append(ClassConstants.EXTERNAL_ACC_STRICT).append(' ');
+        }
+        if ((accessFlags & ClassConstants.INTERNAL_ACC_SYNTHETIC) != 0)
+        {
+            string.append(prefix).append(ClassConstants.EXTERNAL_ACC_SYNTHETIC).append(' ');
         }
 
         return string.toString();

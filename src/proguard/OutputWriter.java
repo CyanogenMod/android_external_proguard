@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -63,13 +63,12 @@ public class OutputWriter
                                   "] must be specified after an input jar, or it will be empty.");
         }
 
-        // Perform some checks on the output jars.
+        // Check if the first of two subsequent the output jars has a filter.
         for (int index = 0; index < programJars.size() - 1; index++)
         {
             ClassPathEntry entry = programJars.get(index);
             if (entry.isOutput())
             {
-                // Check if all but the last output jars have filters.
                 if (entry.getFilter()    == null &&
                     entry.getJarFilter() == null &&
                     entry.getWarFilter() == null &&
@@ -78,10 +77,17 @@ public class OutputWriter
                     programJars.get(index + 1).isOutput())
                 {
                     throw new IOException("The output jar [" + entry.getName() +
-                                          "] must have a filter, or all subsequent jars will be empty.");
+                                          "] must have a filter, or all subsequent output jars will be empty.");
                 }
+            }
+        }
 
-                // Check if the output jar name is different from the input jar names.
+        // Check if the output jar names are different from the input jar names.
+        for (int outIndex = 0; outIndex < programJars.size() - 1; outIndex++)
+        {
+            ClassPathEntry entry = programJars.get(outIndex);
+            if (entry.isOutput())
+            {
                 for (int inIndex = 0; inIndex < programJars.size(); inIndex++)
                 {
                     ClassPathEntry otherEntry = programJars.get(inIndex);
@@ -91,6 +97,40 @@ public class OutputWriter
                     {
                         throw new IOException("The output jar [" + entry.getName() +
                                               "] must be different from all input jars.");
+                    }
+                }
+            }
+        }
+
+        // Check for potential problems with mixed-case class names on
+        // case-insensitive file systems.
+        if (configuration.obfuscate                          &&
+            configuration.useMixedCaseClassNames             &&
+            configuration.classObfuscationDictionary == null &&
+            (configuration.note == null ||
+             !configuration.note.isEmpty()))
+        {
+            String os = System.getProperty("os.name").toLowerCase();
+            if (os.startsWith("windows") ||
+                os.startsWith("mac os"))
+            {
+                // Go over all program class path entries.
+                for (int index = 0; index < programJars.size(); index++)
+                {
+                    // Is it an output directory?
+                    ClassPathEntry entry = programJars.get(index);
+                    if (entry.isOutput() &&
+                        !entry.isJar() &&
+                        !entry.isWar() &&
+                        !entry.isEar() &&
+                        !entry.isZip())
+                    {
+                        System.out.println("Note: you're writing the processed class files to a directory [" + entry.getName() +"].");
+                        System.out.println("      This will likely cause problems with obfuscated mixed-case class names.");
+                        System.out.println("      You should consider writing the output to a jar file, or otherwise");
+                        System.out.println("      specify '-dontusemixedcaseclassnames'.");
+
+                        break;
                     }
                 }
             }
@@ -166,7 +206,7 @@ public class OutputWriter
             {
                 resourceRewriter =
                     new NameFilter(configuration.adaptResourceFileContents,
-                    new NameFilter("META-INF/**",
+                    new NameFilter("META-INF/MANIFEST.MF,META-INF/*.SF",
                         new ManifestRewriter(programClassPool, writer),
                         new DataEntryRewriter(programClassPool, writer)),
                     resourceRewriter);
@@ -221,7 +261,7 @@ public class OutputWriter
         }
         catch (IOException ex)
         {
-            throw new IOException("Can't write [" + classPath.get(fromOutputIndex).getName() + "] (" + ex.getMessage() + ")");
+            throw (IOException)new IOException("Can't write [" + classPath.get(fromOutputIndex).getName() + "] (" + ex.getMessage() + ")").initCause(ex);
         }
     }
 
@@ -232,25 +272,25 @@ public class OutputWriter
      */
     private static Map createPackagePrefixMap(ClassPool classPool)
     {
-        Map PackagePrefixMap = new HashMap();
+        Map packagePrefixMap = new HashMap();
 
         Iterator iterator = classPool.classNames();
         while (iterator.hasNext())
         {
             String className     = (String)iterator.next();
-            String PackagePrefix = ClassUtil.internalPackagePrefix(className);
+            String packagePrefix = ClassUtil.internalPackagePrefix(className);
 
-            String mappedNewPackagePrefix = (String)PackagePrefixMap.get(PackagePrefix);
+            String mappedNewPackagePrefix = (String)packagePrefixMap.get(packagePrefix);
             if (mappedNewPackagePrefix == null ||
-                !mappedNewPackagePrefix.equals(PackagePrefix))
+                !mappedNewPackagePrefix.equals(packagePrefix))
             {
                 String newClassName     = classPool.getClass(className).getName();
                 String newPackagePrefix = ClassUtil.internalPackagePrefix(newClassName);
 
-                PackagePrefixMap.put(PackagePrefix, newPackagePrefix);
+                packagePrefixMap.put(packagePrefix, newPackagePrefix);
             }
         }
 
-        return PackagePrefixMap;
+        return packagePrefixMap;
     }
 }

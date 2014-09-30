@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -112,10 +112,7 @@ implements   ClassVisitor
         System.arraycopy(newConstantPool, 0, programClass.constantPool, 0, newLength);
 
         // Clear any remaining entries.
-        for (int index = newLength; index < constantPoolCount; index++)
-        {
-            programClass.constantPool[index] = null;
-        }
+        Arrays.fill(programClass.constantPool, newLength, constantPoolCount, null);
 
         programClass.u2constantPoolCount = newLength;
 

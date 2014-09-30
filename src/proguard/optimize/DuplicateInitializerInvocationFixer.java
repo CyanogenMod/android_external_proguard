@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -28,7 +28,7 @@ import proguard.classfile.constant.visitor.ConstantVisitor;
 import proguard.classfile.editor.CodeAttributeEditor;
 import proguard.classfile.instruction.*;
 import proguard.classfile.instruction.visitor.InstructionVisitor;
-import proguard.classfile.util.SimplifiedVisitor;
+import proguard.classfile.util.*;
 import proguard.classfile.visitor.MemberVisitor;
 
 /**
@@ -48,12 +48,12 @@ implements   AttributeVisitor,
 
     private final CodeAttributeEditor codeAttributeEditor = new CodeAttributeEditor();
 
-    private String  descriptor;
-    private boolean hasBeenFixed;
+    private String descriptor;
+    private int    descriptorLengthDelta;
 
 
     /**
-     * Creates a new EvaluationSimplifier.
+     * Creates a new DuplicateInitializerInvocationFixer.
      */
     public DuplicateInitializerInvocationFixer()
     {
@@ -62,7 +62,7 @@ implements   AttributeVisitor,
 
 
     /**
-     * Creates a new EvaluationSimplifier.
+     * Creates a new DuplicateInitializerInvocationFixer.
      * @param extraAddedInstructionVisitor an optional extra visitor for all
      *                                     added instructions.
      */
@@ -102,21 +102,22 @@ implements   AttributeVisitor,
     {
         if (constantInstruction.opcode == InstructionConstants.OP_INVOKESPECIAL)
         {
-            hasBeenFixed = false;
+            descriptorLengthDelta = 0;
             clazz.constantPoolEntryAccept(constantInstruction.constantIndex, this);
 
-            if (hasBeenFixed)
+            if (descriptorLengthDelta > 0)
             {
                 Instruction extraInstruction =
-                    new SimpleInstruction(InstructionConstants.OP_ICONST_0);
+                    new SimpleInstruction(descriptorLengthDelta == 1 ?
+                                              InstructionConstants.OP_ICONST_0 :
+                                              InstructionConstants.OP_ACONST_NULL);
 
                 codeAttributeEditor.insertBeforeInstruction(offset,
                                                             extraInstruction);
 
                 if (DEBUG)
                 {
-                    System.out.println("DuplicateInitializerInvocationFixer:");
-                    System.out.println("  Inserting "+extraInstruction.toString()+" before "+constantInstruction.toString(offset));
+                    System.out.println("  ["+clazz.getName()+"."+method.getName(clazz)+method.getDescriptor(clazz)+"] Inserting "+extraInstruction.toString()+" before "+constantInstruction.toString(offset));
                 }
 
                 if (extraAddedInstructionVisitor != null)
@@ -145,6 +146,16 @@ implements   AttributeVisitor,
 
     public void visitProgramMethod(ProgramClass programClass, ProgramMethod programMethod)
     {
-        hasBeenFixed = !descriptor.equals(programMethod.getDescriptor(programClass));
+        descriptorLengthDelta =
+            programMethod.getDescriptor(programClass).length() - descriptor.length();
+
+        if (DEBUG)
+        {
+            if (descriptorLengthDelta > 0)
+            {
+                System.out.println("DuplicateInitializerInvocationFixer:");
+                System.out.println("  ["+programClass.getName()+"."+programMethod.getName(programClass)+programMethod.getDescriptor(programClass)+"] ("+ClassUtil.externalClassAccessFlags(programMethod.getAccessFlags())+") referenced by:");
+            }
+        }
     }
 }

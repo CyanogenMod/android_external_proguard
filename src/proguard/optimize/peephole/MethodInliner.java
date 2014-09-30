@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -29,10 +29,11 @@ import proguard.classfile.editor.*;
 import proguard.classfile.instruction.*;
 import proguard.classfile.instruction.visitor.InstructionVisitor;
 import proguard.classfile.util.*;
-import proguard.classfile.visitor.MemberVisitor;
+import proguard.classfile.visitor.*;
+import proguard.optimize.*;
 import proguard.optimize.info.*;
 
-import java.util.Stack;
+import java.util.*;
 
 /**
  * This AttributeVisitor inlines short methods or methods that are only invoked
@@ -48,10 +49,8 @@ implements   AttributeVisitor,
              MemberVisitor
 {
     private static final int MAXIMUM_INLINED_CODE_LENGTH       = Integer.parseInt(System.getProperty("maximum.inlined.code.length",      "8"));
-    private static final int MAXIMUM_RESULTING_CODE_LENGTH_JSE = Integer.parseInt(System.getProperty("maximum.resulting.code.length", "8000"));
+    private static final int MAXIMUM_RESULTING_CODE_LENGTH_JSE = Integer.parseInt(System.getProperty("maximum.resulting.code.length", "7000"));
     private static final int MAXIMUM_RESULTING_CODE_LENGTH_JME = Integer.parseInt(System.getProperty("maximum.resulting.code.length", "2000"));
-    private static final int MAXIMUM_CODE_EXPANSION            = 2;
-    private static final int MAXIMUM_EXTRA_CODE_LENGTH         = 128;
 
     //*
     private static final boolean DEBUG = false;
@@ -137,6 +136,42 @@ implements   AttributeVisitor,
 
 
     public void visitCodeAttribute(Clazz clazz, Method method, CodeAttribute codeAttribute)
+    {
+        // TODO: Remove this when the method inliner has stabilized.
+        // Catch any unexpected exceptions from the actual visiting method.
+        try
+        {
+            // Process the code.
+            visitCodeAttribute0(clazz, method, codeAttribute);
+        }
+        catch (RuntimeException ex)
+        {
+            System.err.println("Unexpected error while inlining method:");
+            System.err.println("  Target class   = ["+targetClass.getName()+"]");
+            System.err.println("  Target method  = ["+targetMethod.getName(targetClass)+targetMethod.getDescriptor(targetClass)+"]");
+            if (inlining)
+            {
+                System.err.println("  Inlined class  = ["+clazz.getName()+"]");
+                System.err.println("  Inlined method = ["+method.getName(clazz)+method.getDescriptor(clazz)+"]");
+            }
+            System.err.println("  Exception      = ["+ex.getClass().getName()+"] ("+ex.getMessage()+")");
+            System.err.println("Not inlining this method");
+
+            if (DEBUG)
+            {
+                targetMethod.accept(targetClass, new ClassPrinter());
+                if (inlining)
+                {
+                    method.accept(clazz, new ClassPrinter());
+                }
+
+                throw ex;
+            }
+        }
+    }
+
+
+    public void visitCodeAttribute0(Clazz clazz, Method method, CodeAttribute codeAttribute)
     {
         if (!inlining)
         {
@@ -278,7 +313,7 @@ implements   AttributeVisitor,
                 }
 
                 codeAttributeComposer.appendInstruction(parameterSize-parameterIndex-1,
-                                                        new VariableInstruction(opcode, variableOffset + parameterOffset + parameterIndex).shrink());
+                                                        new VariableInstruction(opcode, variableOffset + parameterOffset + parameterIndex));
             }
         }
 
@@ -286,7 +321,7 @@ implements   AttributeVisitor,
         if (!isStatic)
         {
             codeAttributeComposer.appendInstruction(parameterSize,
-                                                    new VariableInstruction(InstructionConstants.OP_ASTORE, variableOffset).shrink());
+                                                    new VariableInstruction(InstructionConstants.OP_ASTORE, variableOffset));
         }
 
         codeAttributeComposer.endCodeFragment();
@@ -305,11 +340,11 @@ implements   AttributeVisitor,
         // Copy the instructions.
         codeAttribute.instructionsAccept(clazz, method, this);
 
-        // Copy the exceptions.
-        codeAttribute.exceptionsAccept(clazz, method, exceptionInfoAdder);
-
         // Append a label just after the code.
         codeAttributeComposer.appendLabel(codeAttribute.u4codeLength);
+
+        // Copy the exceptions.
+        codeAttribute.exceptionsAccept(clazz, method, exceptionInfoAdder);
 
         codeAttributeComposer.endCodeFragment();
     }
@@ -319,7 +354,7 @@ implements   AttributeVisitor,
 
     public void visitAnyInstruction(Clazz clazz, Method method, CodeAttribute codeAttribute, int offset, Instruction instruction)
     {
-        codeAttributeComposer.appendInstruction(offset, instruction.shrink());
+        codeAttributeComposer.appendInstruction(offset, instruction);
     }
 
 
@@ -346,7 +381,7 @@ implements   AttributeVisitor,
                                                   codeAttribute.u4codeLength - offset);
 
                         codeAttributeComposer.appendInstruction(offset,
-                                                                branchInstruction.shrink());
+                                                                branchInstruction);
                     }
                     else
                     {
@@ -359,7 +394,7 @@ implements   AttributeVisitor,
             }
         }
 
-        codeAttributeComposer.appendInstruction(offset, simpleInstruction.shrink());
+        codeAttributeComposer.appendInstruction(offset, simpleInstruction);
     }
 
 
@@ -372,7 +407,7 @@ implements   AttributeVisitor,
             variableInstruction.variableIndex += variableOffset;
         }
 
-        codeAttributeComposer.appendInstruction(offset, variableInstruction.shrink());
+        codeAttributeComposer.appendInstruction(offset, variableInstruction);
     }
 
 
@@ -430,7 +465,7 @@ implements   AttributeVisitor,
                 constantAdder.addConstant(clazz, constantInstruction.constantIndex);
         }
 
-        codeAttributeComposer.appendInstruction(offset, constantInstruction.shrink());
+        codeAttributeComposer.appendInstruction(offset, constantInstruction);
     }
 
 
@@ -454,45 +489,48 @@ implements   AttributeVisitor,
     {
         int accessFlags = programMethod.getAccessFlags();
 
-        if (// Only inline the method if it is private, static, or final.
+        if (// Don't inline methods that must be preserved.
+            !KeepMarker.isKept(programMethod)                                                     &&
+
+            // Only inline the method if it is private, static, or final.
             (accessFlags & (ClassConstants.INTERNAL_ACC_PRIVATE |
                             ClassConstants.INTERNAL_ACC_STATIC  |
-                            ClassConstants.INTERNAL_ACC_FINAL)) != 0                               &&
+                            ClassConstants.INTERNAL_ACC_FINAL)) != 0                              &&
 
             // Only inline the method if it is not synchronized, etc.
             (accessFlags & (ClassConstants.INTERNAL_ACC_SYNCHRONIZED |
                             ClassConstants.INTERNAL_ACC_NATIVE       |
                             ClassConstants.INTERNAL_ACC_INTERFACE    |
-                            ClassConstants.INTERNAL_ACC_ABSTRACT)) == 0                            &&
+                            ClassConstants.INTERNAL_ACC_ABSTRACT)) == 0                           &&
 
             // Don't inline an <init> method, except in an <init> method in the
             // same class.
 //            (!programMethod.getName(programClass).equals(ClassConstants.INTERNAL_METHOD_NAME_INIT) ||
 //             (programClass.equals(targetClass) &&
 //              targetMethod.getName(targetClass).equals(ClassConstants.INTERNAL_METHOD_NAME_INIT))) &&
-            !programMethod.getName(programClass).equals(ClassConstants.INTERNAL_METHOD_NAME_INIT)  &&
+            !programMethod.getName(programClass).equals(ClassConstants.INTERNAL_METHOD_NAME_INIT) &&
 
             // Don't inline a method into itself.
             (!programMethod.equals(targetMethod) ||
-             !programClass.equals(targetClass))                                                    &&
+             !programClass.equals(targetClass))                                                   &&
 
             // Only inline the method if it isn't recursing.
-            !inliningMethods.contains(programMethod)                                               &&
+            !inliningMethods.contains(programMethod)                                              &&
 
             // Only inline the method if its target class has at least the
             // same version number as the source class, in order to avoid
             // introducing incompatible constructs.
-            targetClass.u4version >= programClass.u4version                                        &&
+            targetClass.u4version >= programClass.u4version                                       &&
 
             // Only inline the method if it doesn't invoke a super method, or if
             // it is in the same class.
             (!SuperInvocationMarker.invokesSuperMethods(programMethod) ||
-             programClass.equals(targetClass))                                                     &&
+             programClass.equals(targetClass))                                                    &&
 
             // Only inline the method if it doesn't branch backward while there
             // are uninitialized objects.
             (!BackwardBranchMarker.branchesBackward(programMethod) ||
-             uninitializedObjectCount == 0)                                                        &&
+             uninitializedObjectCount == 0)                                                       &&
 
             // Only inline if the code access of the inlined method allows it.
             (allowAccessModification ||
@@ -501,47 +539,24 @@ implements   AttributeVisitor,
 
               (!AccessMethodMarker.accessesPackageCode(programMethod) ||
                ClassUtil.internalPackageName(programClass.getName()).equals(
-               ClassUtil.internalPackageName(targetClass.getName())))))                            &&
+               ClassUtil.internalPackageName(targetClass.getName())))))                           &&
 
 //               (!AccessMethodMarker.accessesProtectedCode(programMethod) ||
 //                targetClass.extends_(programClass) ||
 //                targetClass.implements_(programClass)) ||
             (!AccessMethodMarker.accessesProtectedCode(programMethod) ||
-             programClass.equals(targetClass))                                                     &&
+             programClass.equals(targetClass))                                                    &&
 
             // Only inline the method if it doesn't catch exceptions, or if it
             // is invoked with an empty stack.
             (!CatchExceptionMarker.catchesExceptions(programMethod) ||
-             emptyInvokingStack)                                                                   &&
+             emptyInvokingStack)                                                                  &&
 
-            // Only inline the method if it comes from the same class or from
-            // a class with a static initializer.
+            // Only inline the method if it comes from the a class with at most
+            // a subset of the initialized superclasses.
             (programClass.equals(targetClass) ||
-             programClass.findMethod(ClassConstants.INTERNAL_METHOD_NAME_CLINIT,
-                                     ClassConstants.INTERNAL_METHOD_TYPE_CLINIT) == null))
-        {
-//            System.out.print("MethodInliner: inlining ");
-//            programMethod.accept(programClass, new SimpleClassPrinter(true));
-//            System.out.print("               in       ");
-//            targetMethod.accept(targetClass, new SimpleClassPrinter(true));
-//
-//            System.out.println("  Private:   "+
-//                               (!AccessMethodMarker.accessesPrivateCode(programMethod) ||
-//                                programClass.equals(targetClass)));
-//
-//            System.out.println("  Package:   "+
-//                               (!AccessMethodMarker.accessesPackageCode(programMethod) ||
-//                                ClassUtil.internalPackageName(programClass.getName()).equals(
-//                                ClassUtil.internalPackageName(targetClass.getName()))));
-//
-//            System.out.println("  Protected: "+
-//                               ((!AccessMethodMarker.accessesProtectedCode(programMethod) ||
-//                                 targetClass.extends_(programClass) ||
-//                                 targetClass.implements_(programClass)) ||
-//                                ClassUtil.internalPackageName(programClass.getName()).equals(
-//                                ClassUtil.internalPackageName(targetClass.getName()))));
-
-            boolean oldInlining = inlining;
+             initializedSuperClasses(targetClass).containsAll(initializedSuperClasses(programClass))))
+        {                                                                                                   boolean oldInlining = inlining;
             inlining = true;
             inliningMethods.push(programMethod);
 
@@ -563,5 +578,22 @@ implements   AttributeVisitor,
         {
             uninitializedObjectCount--;
         }
+    }
+
+
+    /**
+     * Returns the set of superclasses and interfaces that are initialized.
+     */
+    private Set initializedSuperClasses(Clazz clazz)
+    {
+        Set set = new HashSet();
+
+        // Visit all superclasses and interfaces, collecting the ones that have
+        // static initializers.
+        clazz.hierarchyAccept(true, true, true, false,
+                              new StaticInitializerContainingClassFilter(
+                              new ClassCollector(set)));
+
+        return set;
     }
 }

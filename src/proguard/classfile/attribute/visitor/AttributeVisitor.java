@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2013 Eric Lafortune (eric@graphics.cornell.edu)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -35,11 +35,12 @@ public interface AttributeVisitor
 {
     // Attributes that are attached to classes.
 
-    public void visitUnknownAttribute(               Clazz clazz,                UnknownAttribute         unknownAttribute);
-    public void visitSourceFileAttribute(            Clazz clazz,                SourceFileAttribute      sourceFileAttribute);
-    public void visitSourceDirAttribute(             Clazz clazz,                SourceDirAttribute       sourceDirAttribute);
-    public void visitInnerClassesAttribute(          Clazz clazz,                InnerClassesAttribute    innerClassesAttribute);
-    public void visitEnclosingMethodAttribute(       Clazz clazz,                EnclosingMethodAttribute enclosingMethodAttribute);
+    public void visitUnknownAttribute(               Clazz clazz,                UnknownAttribute          unknownAttribute);
+    public void visitBootstrapMethodsAttribute(      Clazz clazz,                BootstrapMethodsAttribute bootstrapMethodsAttribute);
+    public void visitSourceFileAttribute(            Clazz clazz,                SourceFileAttribute       sourceFileAttribute);
+    public void visitSourceDirAttribute(             Clazz clazz,                SourceDirAttribute        sourceDirAttribute);
+    public void visitInnerClassesAttribute(          Clazz clazz,                InnerClassesAttribute     innerClassesAttribute);
+    public void visitEnclosingMethodAttribute(       Clazz clazz,                EnclosingMethodAttribute  enclosingMethodAttribute);
 
     // Attributes that are attached to classes, fields, and methods.
 
