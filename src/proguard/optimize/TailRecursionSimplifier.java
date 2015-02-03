@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -23,7 +23,7 @@ package proguard.optimize;
 import proguard.classfile.*;
 import proguard.classfile.attribute.*;
 import proguard.classfile.attribute.visitor.*;
-import proguard.classfile.constant.MethodrefConstant;
+import proguard.classfile.constant.*;
 import proguard.classfile.constant.visitor.ConstantVisitor;
 import proguard.classfile.editor.CodeAttributeComposer;
 import proguard.classfile.instruction.*;
@@ -54,9 +54,9 @@ implements   AttributeVisitor,
 
 
     private final CodeAttributeComposer codeAttributeComposer = new CodeAttributeComposer();
+    private final MyRecursionChecker    recursionChecker      = new MyRecursionChecker();
 
     private Method  targetMethod;
-    private boolean recursive;
     private boolean inlinedAny;
 
 
@@ -91,52 +91,44 @@ implements   AttributeVisitor,
         int accessFlags = method.getAccessFlags();
 
         if (// Only check the method if it is private, static, or final.
-            (accessFlags & (ClassConstants.INTERNAL_ACC_PRIVATE |
-                            ClassConstants.INTERNAL_ACC_STATIC  |
-                            ClassConstants.INTERNAL_ACC_FINAL)) != 0 &&
+            (accessFlags & (ClassConstants.ACC_PRIVATE |
+                            ClassConstants.ACC_STATIC  |
+                            ClassConstants.ACC_FINAL)) != 0 &&
 
             // Only check the method if it is not synchronized, etc.
-            (accessFlags & (ClassConstants.INTERNAL_ACC_SYNCHRONIZED |
-                            ClassConstants.INTERNAL_ACC_NATIVE       |
-                            ClassConstants.INTERNAL_ACC_INTERFACE    |
-                            ClassConstants.INTERNAL_ACC_ABSTRACT)) == 0)
+            (accessFlags & (ClassConstants.ACC_SYNCHRONIZED |
+                            ClassConstants.ACC_NATIVE       |
+                            ClassConstants.ACC_ABSTRACT)) == 0)
         {
 //            codeAttributeComposer.DEBUG = DEBUG =
 //                clazz.getName().equals("abc/Def") &&
 //                method.getName(clazz).equals("abc");
 
-            targetMethod    = method;
-            inlinedAny      = false;
+            targetMethod = method;
+            inlinedAny   = false;
             codeAttributeComposer.reset();
 
-            // Append the body of the code.
-            copyCode(clazz, method, codeAttribute);
+            // The code may expand, due to expanding constant and variable
+            // instructions.
+            codeAttributeComposer.beginCodeFragment(codeAttribute.u4codeLength);
+
+            // Copy the instructions.
+            codeAttribute.instructionsAccept(clazz, method, this);
 
             // Update the code attribute if any code has been inlined.
             if (inlinedAny)
             {
+                // Copy the exceptions.
+                codeAttribute.exceptionsAccept(clazz, method, this);
+
+                // Append a label just after the code.
+                codeAttributeComposer.appendLabel(codeAttribute.u4codeLength);
+
+                codeAttributeComposer.endCodeFragment();
+
                 codeAttributeComposer.visitCodeAttribute(clazz, method, codeAttribute);
             }
         }
-    }
-
-
-    /**
-     * Appends the code of the given code attribute.
-     */
-    private void copyCode(Clazz clazz, Method method, CodeAttribute codeAttribute)
-    {
-        // The code may expand, due to expanding constant and variable
-        // instructions.
-        codeAttributeComposer.beginCodeFragment(codeAttribute.u4codeLength);
-
-        // Copy the instructions.
-        codeAttribute.instructionsAccept(clazz, method, this);
-
-        // Append a label just after the code.
-        codeAttributeComposer.appendLabel(codeAttribute.u4codeLength);
-
-        codeAttributeComposer.endCodeFragment();
     }
 
 
@@ -145,7 +137,7 @@ implements   AttributeVisitor,
     public void visitAnyInstruction(Clazz clazz, Method method, CodeAttribute codeAttribute, int offset, Instruction instruction)
     {
         // Copy the instruction.
-        codeAttributeComposer.appendInstruction(offset, instruction.shrink());
+        codeAttributeComposer.appendInstruction(offset, instruction);
     }
 
 
@@ -159,9 +151,9 @@ implements   AttributeVisitor,
             case InstructionConstants.OP_INVOKESTATIC:
             {
                 // Is it a recursive call?
-                clazz.constantPoolEntryAccept(constantInstruction.constantIndex, this);
+                clazz.constantPoolEntryAccept(constantInstruction.constantIndex, recursionChecker);
 
-                if (recursive)
+                if (recursionChecker.isRecursive())
                 {
                     // Is the next instruction a return?
                     int nextOffset =
@@ -180,13 +172,13 @@ implements   AttributeVisitor,
                         case InstructionConstants.OP_RETURN:
                         {
                             // Isn't the recursive call inside a try/catch block?
-                            codeAttribute.exceptionsAccept(clazz, method, offset, this);
+                            codeAttribute.exceptionsAccept(clazz, method, offset, recursionChecker);
 
-                            if (recursive)
+                            if (recursionChecker.isRecursive())
                             {
                                 if (DEBUG)
                                 {
-                                    System.out.println("TailRecursionSimplifier.visitConstantInstruction: ["+
+                                    System.out.println("TailRecursionSimplifier: ["+
                                                        clazz.getName()+"."+method.getName(clazz)+method.getDescriptor(clazz)+"], inlining "+constantInstruction.toString(offset));
                                 }
 
@@ -223,15 +215,7 @@ implements   AttributeVisitor,
         }
 
         // Copy the instruction.
-        codeAttributeComposer.appendInstruction(offset, constantInstruction.shrink());
-    }
-
-
-    // Implementations for ConstantVisitor.
-
-    public void visitMethodrefConstant(Clazz clazz, MethodrefConstant methodrefConstant)
-    {
-        recursive = targetMethod.equals(methodrefConstant.referencedMember);
+        codeAttributeComposer.appendInstruction(offset, constantInstruction);
     }
 
 
@@ -239,7 +223,48 @@ implements   AttributeVisitor,
 
     public void visitExceptionInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, ExceptionInfo exceptionInfo)
     {
-        recursive = false;
+        codeAttributeComposer.appendException(new ExceptionInfo(exceptionInfo.u2startPC,
+                                                                exceptionInfo.u2endPC,
+                                                                exceptionInfo.u2handlerPC,
+                                                                exceptionInfo.u2catchType));
+    }
+
+
+    /**
+     * This ConstantVisitor and ExceptionInfoVisitor returns whether a method
+     * invocation can be treated as tail-recursive.
+     */
+    private class MyRecursionChecker
+    extends       SimplifiedVisitor
+    implements    ConstantVisitor,
+                  ExceptionInfoVisitor
+    {
+        private boolean recursive;
+
+
+        /**
+         * Returns whether the method invocation can be treated as
+         * tail-recursive.
+         */
+        public boolean isRecursive()
+        {
+            return recursive;
+        }
+
+        // Implementations for ConstantVisitor.
+
+        public void visitAnyMethodrefConstant(Clazz clazz, RefConstant methodrefConstant)
+        {
+            recursive = targetMethod.equals(methodrefConstant.referencedMember);
+        }
+
+
+        // Implementations for ExceptionInfoVisitor.
+
+        public void visitExceptionInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, ExceptionInfo exceptionInfo)
+        {
+            recursive = false;
+        }
     }
 
 
@@ -254,10 +279,9 @@ implements   AttributeVisitor,
         String descriptor = method.getDescriptor(clazz);
 
         boolean isStatic =
-            (method.getAccessFlags() & ClassConstants.INTERNAL_ACC_STATIC) != 0;
+            (method.getAccessFlags() & ClassConstants.ACC_STATIC) != 0;
 
         // Count the number of parameters, taking into account their categories.
-        int parameterCount  = ClassUtil.internalMethodParameterCount(descriptor);
         int parameterSize   = ClassUtil.internalMethodParameterSize(descriptor);
         int parameterOffset = isStatic ? 0 : 1;
 
@@ -289,23 +313,23 @@ implements   AttributeVisitor,
                 byte opcode;
                 switch (parameterType.charAt(0))
                 {
-                    case ClassConstants.INTERNAL_TYPE_BOOLEAN:
-                    case ClassConstants.INTERNAL_TYPE_BYTE:
-                    case ClassConstants.INTERNAL_TYPE_CHAR:
-                    case ClassConstants.INTERNAL_TYPE_SHORT:
-                    case ClassConstants.INTERNAL_TYPE_INT:
+                    case ClassConstants.TYPE_BOOLEAN:
+                    case ClassConstants.TYPE_BYTE:
+                    case ClassConstants.TYPE_CHAR:
+                    case ClassConstants.TYPE_SHORT:
+                    case ClassConstants.TYPE_INT:
                         opcode = InstructionConstants.OP_ISTORE;
                         break;
 
-                    case ClassConstants.INTERNAL_TYPE_LONG:
+                    case ClassConstants.TYPE_LONG:
                         opcode = InstructionConstants.OP_LSTORE;
                         break;
 
-                    case ClassConstants.INTERNAL_TYPE_FLOAT:
+                    case ClassConstants.TYPE_FLOAT:
                         opcode = InstructionConstants.OP_FSTORE;
                         break;
 
-                    case ClassConstants.INTERNAL_TYPE_DOUBLE:
+                    case ClassConstants.TYPE_DOUBLE:
                         opcode = InstructionConstants.OP_DSTORE;
                         break;
 
@@ -315,7 +339,7 @@ implements   AttributeVisitor,
                 }
 
                 codeAttributeComposer.appendInstruction(parameterSize-parameterIndex-1,
-                                                        new VariableInstruction(opcode, parameterOffset + parameterIndex).shrink());
+                                                        new VariableInstruction(opcode, parameterOffset + parameterIndex));
             }
         }
 
@@ -323,7 +347,7 @@ implements   AttributeVisitor,
         if (!isStatic)
         {
             codeAttributeComposer.appendInstruction(parameterSize,
-                                                    new VariableInstruction(InstructionConstants.OP_ASTORE, 0).shrink());
+                                                    new VariableInstruction(InstructionConstants.OP_ASTORE, 0));
         }
 
         codeAttributeComposer.endCodeFragment();

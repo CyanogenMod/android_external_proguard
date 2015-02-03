@@ -15,10 +15,11 @@
 
 # Save the obfuscation mapping to a file, so we can de-obfuscate any stack
 # traces later on. Keep a fixed source file attribute and all line number
-# tables to actually get these stack traces.
+# tables to get line numbers in the stack traces.
 # You can comment this out if you're not interested in stack traces.
 
 -printmapping out.map
+-keepparameternames
 -renamesourcefileattribute SourceFile
 -keepattributes Exceptions,InnerClasses,Signature,Deprecated,
                 SourceFile,LineNumberTable,EnclosingMethod
@@ -43,14 +44,14 @@
 
 # Preserve all native method names and the names of their classes.
 
--keepclasseswithmembernames class * {
+-keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
 }
 
 # Preserve the special static methods that are required in all enumeration
 # classes.
 
--keepclassmembers class * extends java.lang.Enum {
+-keepclassmembers,allowoptimization enum * {
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }

@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -48,27 +48,34 @@ public class DataEntryReaderFactory
                                                         ClassPathEntry  classPathEntry,
                                                         DataEntryReader reader)
     {
-        String entryName = classPathEntry.getName();
-        boolean isJar = endsWithIgnoreCase(entryName, ".jar");
-        boolean isWar = endsWithIgnoreCase(entryName, ".war");
-        boolean isEar = endsWithIgnoreCase(entryName, ".ear");
-        boolean isZip = endsWithIgnoreCase(entryName, ".zip");
+        boolean isApk = classPathEntry.isApk();
+        boolean isJar = classPathEntry.isJar();
+        boolean isAar = classPathEntry.isAar();
+        boolean isWar = classPathEntry.isWar();
+        boolean isEar = classPathEntry.isEar();
+        boolean isZip = classPathEntry.isZip();
 
         List filter    = classPathEntry.getFilter();
+        List apkFilter = classPathEntry.getApkFilter();
         List jarFilter = classPathEntry.getJarFilter();
+        List aarFilter = classPathEntry.getAarFilter();
         List warFilter = classPathEntry.getWarFilter();
         List earFilter = classPathEntry.getEarFilter();
         List zipFilter = classPathEntry.getZipFilter();
 
         System.out.println(messagePrefix +
-                           (isJar ? "jar" :
+                           (isApk ? "apk" :
+                            isJar ? "jar" :
+                            isAar ? "aar" :
                             isWar ? "war" :
                             isEar ? "ear" :
                             isZip ? "zip" :
                                     "directory") +
                            " [" + classPathEntry.getName() + "]" +
                            (filter    != null ||
+                            apkFilter != null ||
                             jarFilter != null ||
+                            aarFilter != null ||
                             warFilter != null ||
                             earFilter != null ||
                             zipFilter != null ? " (filtered)" : ""));
@@ -82,20 +89,30 @@ public class DataEntryReaderFactory
                          reader);
         }
 
-        // Unzip any jars, if necessary.
-        reader = wrapInJarReader(reader, isJar, jarFilter, ".jar");
-        if (!isJar)
+        // Unzip any apks, if necessary.
+        reader = wrapInJarReader(reader, isApk, apkFilter, ".apk");
+        if (!isApk)
         {
-            // Unzip any wars, if necessary.
-            reader = wrapInJarReader(reader, isWar, warFilter, ".war");
-            if (!isWar)
+            // Unzip any jars, if necessary.
+            reader = wrapInJarReader(reader, isJar, jarFilter, ".jar");
+            if (!isJar)
             {
-                // Unzip any ears, if necessary.
-                reader = wrapInJarReader(reader, isEar, earFilter, ".ear");
-                if (!isEar)
+                // Unzip any aars, if necessary.
+                reader = wrapInJarReader(reader, isAar, aarFilter, ".aar");
+                if (!isAar)
                 {
-                    // Unzip any zips, if necessary.
-                    reader = wrapInJarReader(reader, isZip, zipFilter, ".zip");
+                    // Unzip any wars, if necessary.
+                    reader = wrapInJarReader(reader, isWar, warFilter, ".war");
+                    if (!isWar)
+                    {
+                        // Unzip any ears, if necessary.
+                        reader = wrapInJarReader(reader, isEar, earFilter, ".ear");
+                        if (!isEar)
+                        {
+                            // Unzip any zips, if necessary.
+                            reader = wrapInJarReader(reader, isZip, zipFilter, ".zip");
+                        }
+                    }
                 }
             }
         }
@@ -138,18 +155,5 @@ public class DataEntryReaderFactory
                        jarReader,
                        reader);
         }
-    }
-
-
-    /**
-     * Returns whether the given string ends with the given suffix, ignoring its
-     * case.
-     */
-    private static boolean endsWithIgnoreCase(String string, String suffix)
-    {
-        int stringLength = string.length();
-        int suffixLength = suffix.length();
-
-        return string.regionMatches(true, stringLength - suffixLength, suffix, 0, suffixLength);
     }
 }

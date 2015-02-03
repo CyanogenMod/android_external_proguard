@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -21,6 +21,8 @@
 package proguard.evaluation;
 
 import proguard.evaluation.value.*;
+
+import java.util.Arrays;
 
 /**
  * This class represents a local variable frame that contains <code>Value</code>
@@ -67,18 +69,15 @@ public class Variables
     public void reset(int size)
     {
         // Is the values array large enough?
-        if (size > values.length)
+        if (values.length < size)
         {
             // Create a new one.
             values = new Value[size];
         }
         else
         {
-            // Clear the variables.
-            for (int index = 0; index < values.length; index++)
-            {
-                values[index] = null;
-            }
+            // Clear the old variables.
+            Arrays.fill(values, 0, this.size, null);
         }
 
         this.size = size;

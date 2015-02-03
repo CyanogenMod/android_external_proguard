@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -47,18 +47,23 @@ public class FilterDialog extends JDialog
     public static final int APPROVE_OPTION = 0;
 
     private static final String DEFAULT_FILTER     = "**";
+    private static final String DEFAULT_APK_FILTER = "**.apk";
     private static final String DEFAULT_JAR_FILTER = "**.jar";
+    private static final String DEFAULT_AAR_FILTER = "**.aar";
     private static final String DEFAULT_WAR_FILTER = "**.war";
     private static final String DEFAULT_EAR_FILTER = "**.ear";
     private static final String DEFAULT_ZIP_FILTER = "**.zip";
 
 
     private final JTextField filterTextField    = new JTextField(40);
+    private final JTextField apkFilterTextField = new JTextField(40);
     private final JTextField jarFilterTextField = new JTextField(40);
+    private final JTextField aarFilterTextField = new JTextField(40);
     private final JTextField warFilterTextField = new JTextField(40);
     private final JTextField earFilterTextField = new JTextField(40);
     private final JTextField zipFilterTextField = new JTextField(40);
-    private int        returnValue;
+
+    private int returnValue;
 
 
     public FilterDialog(JFrame owner,
@@ -120,7 +125,9 @@ public class FilterDialog extends JDialog
 
         // Create the filter labels.
         JLabel filterLabel    = new JLabel(msg("nameFilter"));
+        JLabel apkFilterLabel = new JLabel(msg("apkNameFilter"));
         JLabel jarFilterLabel = new JLabel(msg("jarNameFilter"));
+        JLabel aarFilterLabel = new JLabel(msg("aarNameFilter"));
         JLabel warFilterLabel = new JLabel(msg("warNameFilter"));
         JLabel earFilterLabel = new JLabel(msg("earNameFilter"));
         JLabel zipFilterLabel = new JLabel(msg("zipNameFilter"));
@@ -135,8 +142,14 @@ public class FilterDialog extends JDialog
         filterPanel.add(tip(filterLabel,        "nameFilterTip"),     labelConstraints);
         filterPanel.add(tip(filterTextField,    "fileNameFilterTip"), textFieldConstraints);
 
+        filterPanel.add(tip(apkFilterLabel,     "apkNameFilterTip"),  labelConstraints);
+        filterPanel.add(tip(apkFilterTextField, "fileNameFilterTip"), textFieldConstraints);
+
         filterPanel.add(tip(jarFilterLabel,     "jarNameFilterTip"),  labelConstraints);
         filterPanel.add(tip(jarFilterTextField, "fileNameFilterTip"), textFieldConstraints);
+
+        filterPanel.add(tip(aarFilterLabel,     "aarNameFilterTip"),  labelConstraints);
+        filterPanel.add(tip(aarFilterTextField, "fileNameFilterTip"), textFieldConstraints);
 
         filterPanel.add(tip(warFilterLabel,     "warNameFilterTip"),  labelConstraints);
         filterPanel.add(tip(warFilterTextField, "fileNameFilterTip"), textFieldConstraints);
@@ -182,7 +195,7 @@ public class FilterDialog extends JDialog
      */
     public void setFilter(List filter)
     {
-        filterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter) : DEFAULT_FILTER);
+        filterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter, true) : DEFAULT_FILTER);
     }
 
 
@@ -198,11 +211,31 @@ public class FilterDialog extends JDialog
 
 
     /**
+     * Sets the apk filter to be represented in this dialog.
+     */
+    public void setApkFilter(List filter)
+    {
+        apkFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter, true) : DEFAULT_APK_FILTER);
+    }
+
+
+    /**
+     * Returns the apk filter currently represented in this dialog.
+     */
+    public List getApkFilter()
+    {
+        String filter = apkFilterTextField.getText();
+
+        return filter.equals(DEFAULT_APK_FILTER) ? null : ListUtil.commaSeparatedList(filter);
+    }
+
+
+    /**
      * Sets the jar filter to be represented in this dialog.
      */
     public void setJarFilter(List filter)
     {
-        jarFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter) : DEFAULT_JAR_FILTER);
+        jarFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter, true) : DEFAULT_JAR_FILTER);
     }
 
 
@@ -218,11 +251,31 @@ public class FilterDialog extends JDialog
 
 
     /**
+     * Sets the aar filter to be represented in this dialog.
+     */
+    public void setAarFilter(List filter)
+    {
+        aarFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter, true) : DEFAULT_AAR_FILTER);
+    }
+
+
+    /**
+     * Returns the aar filter currently represented in this dialog.
+     */
+    public List getAarFilter()
+    {
+        String filter = aarFilterTextField.getText();
+
+        return filter.equals(DEFAULT_AAR_FILTER) ? null : ListUtil.commaSeparatedList(filter);
+    }
+
+
+    /**
      * Sets the war filter to be represented in this dialog.
      */
     public void setWarFilter(List filter)
     {
-        warFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter) : DEFAULT_WAR_FILTER);
+        warFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter, true) : DEFAULT_WAR_FILTER);
     }
 
 
@@ -242,7 +295,7 @@ public class FilterDialog extends JDialog
      */
     public void setEarFilter(List filter)
     {
-        earFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter) : DEFAULT_EAR_FILTER);
+        earFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter, true) : DEFAULT_EAR_FILTER);
     }
 
 
@@ -262,7 +315,7 @@ public class FilterDialog extends JDialog
      */
     public void setZipFilter(List filter)
     {
-        zipFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter) : DEFAULT_ZIP_FILTER);
+        zipFilterTextField.setText(filter != null ? ListUtil.commaSeparatedString(filter, true) : DEFAULT_ZIP_FILTER);
     }
 
 

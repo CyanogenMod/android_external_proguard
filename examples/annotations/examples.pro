@@ -8,8 +8,7 @@
 # Specify the input, output, and library jars.
 # This is assuming the code has been compiled in the examples directory.
 
-#-injars  examples(*.class)
--injars  classes(*.class)
+-injars  examples(*.class)
 -outjars out
 
 -libraryjars <java.home>/lib/rt.jar
@@ -33,14 +32,14 @@
 
 # Preserve all native method names and the names of their classes.
 
--keepclasseswithmembernames class * {
+-keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
 }
 
 # Preserve the special static methods that are required in all enumeration
 # classes.
 
--keepclassmembers class * extends java.lang.Enum {
+-keepclassmembers,allowoptimization enum * {
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }

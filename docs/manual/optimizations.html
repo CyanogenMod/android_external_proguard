@@ -1,4 +1,4 @@
-<!doctype html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<!doctype html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
 <head>
 <meta http-equiv="content-type" content="text/html; charset=iso-8859-1">
@@ -7,6 +7,19 @@
 <title>Optimizations</title>
 </head>
 <body>
+
+<script type="text/javascript" language="JavaScript">
+<!--
+if (window.self==window.top)
+  document.write('<a class="largebutton" target="_top" href="../index.html#manual/optimizations.html">ProGuard index</a> <a class="largebutton" target="_top" href="http://www.saikoa.com/dexguard">DexGuard</a> <a class="largebutton" target="_top" href="http://www.guardsquare.com/">GuardSquare</a> <a class="largebutton" target="other" href="http://sourceforge.net/projects/proguard/">Sourceforge</a>')
+//-->
+</script>
+<noscript>
+<a class="largebutton" target="_top"  href="../index.html#manual/optimizations.html">ProGuard index</a>
+<a class="largebutton" target="_top"  href="http://www.saikoa.com/dexguard">DexGuard</a>
+<a class="largebutton" target="_top"  href="http://www.guardsquare.com/">GuardSquare</a>
+<a class="largebutton" target="other" href="http://sourceforge.net/projects/proguard/">Sourceforge</a>
+</noscript>
 
 <h2>Optimizations</h2>
 
@@ -54,6 +67,9 @@ are added and reorganized.
 <dl>
 <dt><code><b>class/marking/final</b></code></dt>
 <dd>Marks classes as final, whenever possible.</dd>
+
+<dt><code><b>class/unboxing/enum</b></code></dt>
+<dd>Simplifies enum types to integer constants, whenever possible.</dd>
 
 <dt><code><b>class/merging/vertical</b></code></dt>
 <dd>Merges classes vertically in the class hierarchy, whenever possible.</dd>
@@ -124,6 +140,9 @@ are added and reorganized.
     <code><b>code/simplification/branch</b></code></dt>
 <dd>Performs peephole optimizations for branch instructions.</dd>
 
+<dt><code><b>code/simplification/string</b></code></dt>
+<dd>Performs peephole optimizations for constant strings.</dd>
+
 <dt><div>(<i>best used with</i> <code>code/removal/advanced</code>)</div>
     <code><b>code/simplification/advanced</b></code></dt>
 <dd>Simplifies code based on control flow analysis and data flow
@@ -142,17 +161,42 @@ are added and reorganized.
 <dd>Removes unused variables from the local variable frame.</dd>
 
 <dt><code><b>code/removal/exception</b></code></dt>
-<dd>Removes exceptions with empty catch blocks.</dd>
+<dd>Removes exceptions with empty try blocks.</dd>
 
 <dt><code><b>code/allocation/variable</b></code></dt>
 <dd>Optimizes variable allocation on the local variable frame.</dd>
 </dl>
 <p>
 
-<hr>
+ProGuard also provides some unofficial settings to control optimizations, that
+may disappear in future versions. These are Java system properties, which
+can be set as JVM arguments (with <code>-D.....)</code>:
+<dl>
+<dt><code><b>maximum.inlined.code.length</b></code> (default = 8 bytes)</dt>
+<dd>Specifies the maximum code length (expressed in bytes) of short methods
+    that are eligible to be inlined. Inlining methods that are too long may
+    unnecessarily inflate the code size.</dd>
+
+<dt><code><b>maximum.resulting.code.length</b></code> (default = 8000 bytes
+    for JSE, 2000 bytes for JME)</dt>
+<dd>Specifies the maximum resulting code length (expressed in bytes) allowed
+    when inlining methods. Many Java virtual machines do not apply just-in-time
+    compilation to methods that are too long, so it's important not to let them
+    grow too large.</dd>
+
+<dt><code><b>optimize.conservatively</b></code> (default = unset)</dt>
+<dd>Allows input code with ordinary instructions intentionally throwing
+    <code>NullPointerException</code>,
+    <code>ArrayIndexOutOfBoundsException</code>, or
+    <code>ClassCastException</code>, without any other useful purposes. By
+    default, ProGuard may just discard such seemingly useless instructions,
+    resulting in better optimization of most common code.</dd>
+</dl>
+
+<hr />
 <address>
-Copyright &copy; 2002-2009
-<a href="http://www.graphics.cornell.edu/~eric/">Eric Lafortune</a>.
+Copyright &copy; 2002-2015
+<a target="other" href="http://www.lafortune.eu/">Eric Lafortune</a> @ <a target="top" href="http://www.guardsquare.com/">GuardSquare</a>.
 </address>
 </body>
 </html>

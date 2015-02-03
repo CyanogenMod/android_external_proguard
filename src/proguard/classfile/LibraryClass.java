@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -74,7 +74,7 @@ public class LibraryClass implements Clazz
      */
     boolean isVisible()
     {
-        return (u2accessFlags & ClassConstants.INTERNAL_ACC_PUBLIC) != 0;
+        return (u2accessFlags & ClassConstants.ACC_PUBLIC) != 0;
     }
 
 
@@ -137,6 +137,22 @@ public class LibraryClass implements Clazz
     }
 
 
+    public String getRefClassName(int constantIndex)
+    {
+        throw new UnsupportedOperationException("Library class ["+thisClassName+"] doesn't store constant pool");
+    }
+
+    public String getRefName(int constantIndex)
+    {
+        throw new UnsupportedOperationException("Library class ["+thisClassName+"] doesn't store constant pool");
+    }
+
+    public String getRefType(int constantIndex)
+    {
+        throw new UnsupportedOperationException("Library class ["+thisClassName+"] doesn't store constant pool");
+    }
+
+
     public void addSubClass(Clazz clazz)
     {
         if (subClasses == null)
@@ -179,6 +195,18 @@ public class LibraryClass implements Clazz
     }
 
 
+    public boolean extends_(String className)
+    {
+        if (getName().equals(className))
+        {
+            return true;
+        }
+
+        return superClass != null &&
+               superClass.extends_(className);
+    }
+
+
     public boolean extendsOrImplements(Clazz clazz)
     {
         if (this.equals(clazz))
@@ -199,6 +227,36 @@ public class LibraryClass implements Clazz
                 Clazz interfaceClass = interfaceClasses[index];
                 if (interfaceClass != null &&
                     interfaceClass.extendsOrImplements(clazz))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+
+    public boolean extendsOrImplements(String className)
+    {
+        if (getName().equals(className))
+        {
+            return true;
+        }
+
+        if (superClass != null &&
+            superClass.extendsOrImplements(className))
+        {
+            return true;
+        }
+
+        if (interfaceClasses != null)
+        {
+            for (int index = 0; index < interfaceClasses.length; index++)
+            {
+                Clazz interfaceClass = interfaceClasses[index];
+                if (interfaceClass != null &&
+                    interfaceClass.extendsOrImplements(className))
                 {
                     return true;
                 }
@@ -452,16 +510,22 @@ public class LibraryClass implements Clazz
     public boolean mayHaveImplementations(Method method)
     {
         return
-           (u2accessFlags & ClassConstants.INTERNAL_ACC_FINAL) == 0 &&
+           (u2accessFlags & ClassConstants.ACC_FINAL) == 0 &&
            (method == null ||
-            ((method.getAccessFlags() & (ClassConstants.INTERNAL_ACC_PRIVATE |
-                                         ClassConstants.INTERNAL_ACC_STATIC  |
-                                         ClassConstants.INTERNAL_ACC_FINAL)) == 0 &&
-                                                                                  !method.getName(this).equals(ClassConstants.INTERNAL_METHOD_NAME_INIT)));
+            ((method.getAccessFlags() & (ClassConstants.ACC_PRIVATE |
+                                         ClassConstants.ACC_STATIC  |
+                                         ClassConstants.ACC_FINAL)) == 0 &&
+             !method.getName(this).equals(ClassConstants.METHOD_NAME_INIT)));
     }
 
 
     public void attributesAccept(AttributeVisitor attributeVisitor)
+    {
+        throw new UnsupportedOperationException("Library class ["+thisClassName+"] doesn't store attributes");
+    }
+
+
+    public void attributeAccept(String name, AttributeVisitor attributeVisitor)
     {
         throw new UnsupportedOperationException("Library class ["+thisClassName+"] doesn't store attributes");
     }

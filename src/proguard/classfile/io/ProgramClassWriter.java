@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -23,6 +23,8 @@ package proguard.classfile.io;
 import proguard.classfile.*;
 import proguard.classfile.attribute.*;
 import proguard.classfile.attribute.annotation.*;
+import proguard.classfile.attribute.annotation.target.*;
+import proguard.classfile.attribute.annotation.target.visitor.*;
 import proguard.classfile.attribute.annotation.visitor.*;
 import proguard.classfile.attribute.preverification.*;
 import proguard.classfile.attribute.preverification.visitor.*;
@@ -57,7 +59,7 @@ implements   ClassVisitor,
 
 
     /**
-     * Creates a new ProgramClassWriter for reading from the given DataOutput.
+     * Creates a new ProgramClassWriter for writing to the given DataOutput.
      */
     public ProgramClassWriter(DataOutput dataOutput)
     {
@@ -208,6 +210,20 @@ implements   ClassVisitor,
         }
 
 
+        public void visitInvokeDynamicConstant(Clazz clazz, InvokeDynamicConstant invokeDynamicConstant)
+        {
+            dataOutput.writeShort(invokeDynamicConstant.u2bootstrapMethodAttributeIndex);
+            dataOutput.writeShort(invokeDynamicConstant.u2nameAndTypeIndex);
+        }
+
+
+        public void visitMethodHandleConstant(Clazz clazz, MethodHandleConstant methodHandleConstant)
+        {
+            dataOutput.writeByte(methodHandleConstant.u1referenceKind);
+            dataOutput.writeShort(methodHandleConstant.u2referenceIndex);
+        }
+
+
         public void visitAnyRefConstant(Clazz clazz, RefConstant refConstant)
         {
             dataOutput.writeShort(refConstant.u2classIndex);
@@ -218,6 +234,12 @@ implements   ClassVisitor,
         public void visitClassConstant(Clazz clazz, ClassConstant classConstant)
         {
             dataOutput.writeShort(classConstant.u2nameIndex);
+        }
+
+
+        public void visitMethodTypeConstant(Clazz clazz, MethodTypeConstant methodTypeConstant)
+        {
+            dataOutput.writeShort(methodTypeConstant.u2descriptorIndex);
         }
 
 
@@ -263,14 +285,20 @@ implements   ClassVisitor,
     private class AttributeBodyWriter
     extends       SimplifiedVisitor
     implements    AttributeVisitor,
+                  BootstrapMethodInfoVisitor,
                   InnerClassesInfoVisitor,
                   ExceptionInfoVisitor,
                   StackMapFrameVisitor,
                   VerificationTypeVisitor,
                   LineNumberInfoVisitor,
+                  ParameterInfoVisitor,
                   LocalVariableInfoVisitor,
                   LocalVariableTypeInfoVisitor,
                   AnnotationVisitor,
+                  TypeAnnotationVisitor,
+                  TargetInfoVisitor,
+                  TypePathInfoVisitor,
+                  LocalVariableTargetElementVisitor,
                   ElementValueVisitor
     {
         // Implementations for AttributeVisitor.
@@ -279,6 +307,15 @@ implements   ClassVisitor,
         {
             // Write the unknown information.
             dataOutput.write(unknownAttribute.info);
+        }
+
+
+        public void visitBootstrapMethodsAttribute(Clazz clazz, BootstrapMethodsAttribute bootstrapMethodsAttribute)
+        {
+            // Write the bootstrap methods.
+            dataOutput.writeShort(bootstrapMethodsAttribute.u2bootstrapMethodsCount);
+
+            bootstrapMethodsAttribute.bootstrapMethodEntriesAccept(clazz, this);
         }
 
 
@@ -331,6 +368,15 @@ implements   ClassVisitor,
         public void visitConstantValueAttribute(Clazz clazz, Field field, ConstantValueAttribute constantValueAttribute)
         {
             dataOutput.writeShort(constantValueAttribute.u2constantValueIndex);
+        }
+
+
+        public void visitMethodParametersAttribute(Clazz clazz, Method method, MethodParametersAttribute methodParametersAttribute)
+        {
+            // Write the parameter information.
+            dataOutput.writeByte(methodParametersAttribute.u1parametersCount);
+
+            methodParametersAttribute.parametersAccept(clazz, method, this);
         }
 
 
@@ -426,9 +472,9 @@ implements   ClassVisitor,
         public void visitAnyParameterAnnotationsAttribute(Clazz clazz, Method method, ParameterAnnotationsAttribute parameterAnnotationsAttribute)
         {
             // Write the parameter annotations.
-            dataOutput.writeByte(parameterAnnotationsAttribute.u2parametersCount);
+            dataOutput.writeByte(parameterAnnotationsAttribute.u1parametersCount);
 
-            for (int parameterIndex = 0; parameterIndex < parameterAnnotationsAttribute.u2parametersCount; parameterIndex++)
+            for (int parameterIndex = 0; parameterIndex < parameterAnnotationsAttribute.u1parametersCount; parameterIndex++)
             {
                 // Write the parameter annotations of the given parameter.
                 int          u2annotationsCount = parameterAnnotationsAttribute.u2parameterAnnotationsCount[parameterIndex];
@@ -438,11 +484,19 @@ implements   ClassVisitor,
 
                 for (int index = 0; index < u2annotationsCount; index++)
                 {
-                    Annotation annotation = annotations[index];
-                    this.visitAnnotation(clazz, annotation);
+                    visitAnnotation(clazz, annotations[index]);
                 }
 
             }
+        }
+
+
+        public void visitAnyTypeAnnotationsAttribute(Clazz clazz, TypeAnnotationsAttribute typeAnnotationsAttribute)
+        {
+            // Write the type annotations.
+            dataOutput.writeShort(typeAnnotationsAttribute.u2annotationsCount);
+
+            typeAnnotationsAttribute.typeAnnotationsAccept(clazz, this);
         }
 
 
@@ -450,6 +504,22 @@ implements   ClassVisitor,
         {
             // Write the default element value.
             annotationDefaultAttribute.defaultValue.accept(clazz, null, this);
+        }
+
+
+        // Implementations for BootstrapMethodInfoVisitor.
+
+        public void visitBootstrapMethodInfo(Clazz clazz, BootstrapMethodInfo bootstrapMethodInfo)
+        {
+            dataOutput.writeShort(bootstrapMethodInfo.u2methodHandleIndex);
+
+            // Write the bootstrap method arguments.
+            dataOutput.writeShort(bootstrapMethodInfo.u2methodArgumentCount);
+
+            for (int index = 0; index < bootstrapMethodInfo.u2methodArgumentCount; index++)
+            {
+                dataOutput.writeShort(bootstrapMethodInfo.u2methodArguments[index]);
+            }
         }
 
 
@@ -496,6 +566,15 @@ implements   ClassVisitor,
         }
 
 
+        // Implementations for ParameterInfoVisitor.
+
+        public void visitParameterInfo(Clazz clazz, Method method, int parameterIndex, ParameterInfo parameterInfo)
+        {
+            dataOutput.writeShort(parameterInfo.u2nameIndex);
+            dataOutput.writeShort(parameterInfo.u2accessFlags);
+        }
+
+
         // Implementations for LocalVariableInfoVisitor.
 
         public void visitLocalVariableInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, LocalVariableInfo localVariableInfo)
@@ -531,6 +610,110 @@ implements   ClassVisitor,
             dataOutput.writeShort(annotation.u2elementValuesCount);
 
             annotation.elementValuesAccept(clazz, this);
+        }
+
+
+        // Implementations for TypeAnnotationVisitor.
+
+        public void visitTypeAnnotation(Clazz clazz, TypeAnnotation typeAnnotation)
+        {
+            // Write the target info.
+            dataOutput.writeByte(typeAnnotation.targetInfo.u1targetType);
+
+            typeAnnotation.targetInfoAccept(clazz, this);
+
+            // Write the type path.
+            dataOutput.writeByte(typeAnnotation.typePath.length);
+
+            typeAnnotation.typePathInfosAccept(clazz, this);
+
+            // Write the actual annotation.
+            visitAnnotation(clazz, typeAnnotation);
+        }
+
+
+        // Implementations for TargetInfoVisitor.
+
+        public void visitTypeParameterTargetInfo(Clazz clazz, TypeAnnotation typeAnnotation, TypeParameterTargetInfo typeParameterTargetInfo)
+        {
+            dataOutput.writeByte(typeParameterTargetInfo.u1typeParameterIndex);
+        }
+
+
+        public void visitSuperTypeTargetInfo(Clazz clazz, TypeAnnotation typeAnnotation, SuperTypeTargetInfo superTypeTargetInfo)
+        {
+            dataOutput.writeShort(superTypeTargetInfo.u2superTypeIndex);
+        }
+
+
+        public void visitTypeParameterBoundTargetInfo(Clazz clazz, TypeAnnotation typeAnnotation, TypeParameterBoundTargetInfo typeParameterBoundTargetInfo)
+        {
+            dataOutput.writeByte(typeParameterBoundTargetInfo.u1typeParameterIndex);
+            dataOutput.writeByte(typeParameterBoundTargetInfo.u1boundIndex);
+        }
+
+
+        public void visitEmptyTargetInfo(Clazz clazz, Member member, TypeAnnotation typeAnnotation, EmptyTargetInfo emptyTargetInfo)
+        {
+        }
+
+
+        public void visitFormalParameterTargetInfo(Clazz clazz, Method method, TypeAnnotation typeAnnotation, FormalParameterTargetInfo formalParameterTargetInfo)
+        {
+            dataOutput.writeByte(formalParameterTargetInfo.u1formalParameterIndex);
+        }
+
+
+        public void visitThrowsTargetInfo(Clazz clazz, Method method, TypeAnnotation typeAnnotation, ThrowsTargetInfo throwsTargetInfo)
+        {
+            dataOutput.writeShort(throwsTargetInfo.u2throwsTypeIndex);
+        }
+
+
+        public void visitLocalVariableTargetInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, TypeAnnotation typeAnnotation, LocalVariableTargetInfo localVariableTargetInfo)
+        {
+            // Write the local variable target elements.
+            dataOutput.writeShort(localVariableTargetInfo.u2tableLength);
+
+            localVariableTargetInfo.targetElementsAccept(clazz, method, codeAttribute, typeAnnotation, this);
+        }
+
+
+        public void visitCatchTargetInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, TypeAnnotation typeAnnotation, CatchTargetInfo catchTargetInfo)
+        {
+            dataOutput.writeShort(catchTargetInfo.u2exceptionTableIndex);
+        }
+
+
+        public void visitOffsetTargetInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, TypeAnnotation typeAnnotation, OffsetTargetInfo offsetTargetInfo)
+        {
+            dataOutput.writeShort(offsetTargetInfo.u2offset);
+        }
+
+
+        public void visitTypeArgumentTargetInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, TypeAnnotation typeAnnotation, TypeArgumentTargetInfo typeArgumentTargetInfo)
+        {
+            dataOutput.writeShort(typeArgumentTargetInfo.u2offset);
+            dataOutput.writeByte(typeArgumentTargetInfo.u1typeArgumentIndex);
+        }
+
+
+        // Implementations for TypePathInfoVisitor.
+
+        public void visitTypePathInfo(Clazz clazz, TypeAnnotation typeAnnotation, TypePathInfo typePathInfo)
+        {
+            dataOutput.writeByte(typePathInfo.u1typePathKind);
+            dataOutput.writeByte(typePathInfo.u1typeArgumentIndex);
+        }
+
+
+        // Implementations for LocalVariableTargetElementVisitor.
+
+        public void visitLocalVariableTargetElement(Clazz clazz, Method method, CodeAttribute codeAttribute, TypeAnnotation typeAnnotation, LocalVariableTargetInfo localVariableTargetInfo, LocalVariableTargetElement localVariableTargetElement)
+        {
+            dataOutput.writeShort(localVariableTargetElement.u2startPC);
+            dataOutput.writeShort(localVariableTargetElement.u2length);
+            dataOutput.writeShort(localVariableTargetElement.u2index);
         }
 
 

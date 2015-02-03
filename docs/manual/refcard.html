@@ -1,4 +1,4 @@
-<!doctype html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<!doctype html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
 <head>
 <meta http-equiv="content-type" content="text/html; charset=iso-8859-1">
@@ -7,6 +7,19 @@
 <title>ProGuard Reference Card</title>
 </head>
 <body>
+
+<script type="text/javascript" language="JavaScript">
+<!--
+if (window.self==window.top)
+  document.write('<a class="largebutton" target="_top" href="../index.html#manual/refcard.html">ProGuard index</a> <a class="largebutton" target="_top" href="http://www.saikoa.com/dexguard">DexGuard</a> <a class="largebutton" target="_top" href="http://www.guardsquare.com/">GuardSquare</a> <a class="largebutton" target="other" href="http://sourceforge.net/projects/proguard/">Sourceforge</a>')
+//-->
+</script>
+<noscript>
+<a class="largebutton" target="_top"  href="../index.html#manual/refcard.html">ProGuard index</a>
+<a class="largebutton" target="_top"  href="http://www.saikoa.com/dexguard">DexGuard</a>
+<a class="largebutton" target="_top"  href="http://www.guardsquare.com/">GuardSquare</a>
+<a class="largebutton" target="other" href="http://sourceforge.net/projects/proguard/">Sourceforge</a>
+</noscript>
 
 <h1>ProGuard Reference Card</h1>
 
@@ -52,7 +65,7 @@
 <tr>
 <td valign="top"><a href="usage.html#outjars"><code><b>-outjars</b></code></a>
                  <a href="usage.html#classpath"><i>class_path</i></a></td>
-<td>Specifies the name of the output jars (or wars, ears, zips, or
+<td>Specifies the names of the output jars (or wars, ears, zips, or
     directories).</td>
 </tr>
 
@@ -63,8 +76,13 @@
 </tr>
 
 <tr>
+<td valign="top"><a href="usage.html#skipnonpubliclibraryclasses"><code><b>-skipnonpubliclibraryclasses</b></code></a></td>
+<td>Ignore non-public library classes.</td>
+</tr>
+
+<tr>
 <td valign="top"><a href="usage.html#dontskipnonpubliclibraryclasses"><code><b>-dontskipnonpubliclibraryclasses</b></code></a></td>
-<td>Don't ignore non-public library classes.</td>
+<td>Don't ignore non-public library classes (the default).</td>
 </tr>
 
 <tr>
@@ -281,6 +299,11 @@
 </tr>
 
 <tr>
+<td valign="top"><a href="usage.html#keepparameternames"><code><b>-keepparameternames</b></code></a></td>
+<td>Keep the parameter names and types of methods that are kept.</td>
+</tr>
+
+<tr>
 <td valign="top"><a href="usage.html#renamesourcefileattribute"><code><b>-renamesourcefileattribute</b></code></a>
                  [<i>string</i>]</td>
 <td>Put the given constant string in the <code>SourceFile</code>
@@ -345,14 +368,14 @@
 <tr>
 <td valign="top"><a href="usage.html#printconfiguration"><code><b>-printconfiguration</b></code></a>
                  [<a href="usage.html#filename"><i>filename</i></a>]</td>
-<td>Write out the internal structure of the processed class files, to the
+<td>Write out the entire configuration in traditional ProGuard style, to the
     standard output or to the given file.</td>
 </tr>
 
 <tr>
 <td valign="top"><a href="usage.html#dump"><code><b>-dump</b></code></a>
                  [<a href="usage.html#filename"><i>filename</i></a>]</td>
-<td>Write out the entire configuration in traditional ProGuard style, to the
+<td>Write out the internal structure of the processed class files, to the
     standard output or to the given file.</td>
 </tr>
 
@@ -362,11 +385,11 @@ Notes:
 <ul>
 
 <li><i>class_path</i> is a list of jars, wars, ears, zips, and directories,
-    with optional filters, separated by path separators.
+    with optional filters, separated by path separators.</li>
 <li><i>filename</i> can contain Java system properties delimited by
-    '<b>&lt;</b>' and '<b>&gt;</b>'.
+    '<b>&lt;</b>' and '<b>&gt;</b>'.</li>
 <li>If <i>filename</i> contains special characters, the entire name
-    should be quoted with single or double quotes.
+    should be quoted with single or double quotes.</li>
 </ul>
 <p>
 
@@ -406,18 +429,23 @@ Notes:
 <table cellspacing="10">
 
 <tr>
+<td valign="top"><a href="usage.html#includedescriptorclasses"><code><b>includedescriptorclasses</b></code></a></td>
+<td>Also keep any classes in the descriptors of specified fields and methods.
+</tr>
+
 <td valign="top"><a href="usage.html#allowshrinking"><code><b>allowshrinking</b></code></a></td>
-<td>The entry points specified in the keep tag may be shrunk.</td>
+<td>Allow the specified entry points to be removed in the shrinking step.</td>
 </tr>
 
 <tr>
 <td valign="top"><a href="usage.html#allowoptimization"><code><b>allowoptimization</b></code></a></td>
-<td>The entry points specified in the keep tag may be optimized.</td>
+<td>Allow the specified entry points to be modified in the optimization
+    step.</td>
 </tr>
 
 <tr>
 <td valign="top"><a href="usage.html#allowobfuscation"><code><b>allowobfuscation</b></code></a></td>
-<td>The entry points specified in the keep tag may be obfuscated.</td>
+<td>Allow the specified entry points to be renamed in the obfuscation step.</td>
 </tr>
 
 </table>
@@ -443,23 +471,22 @@ Notes:
 Notes:
 <ul>
 <li>Class names must always be fully qualified, i.e. including their package
-    names.
+    names.</li>
 <li>Types in <i>classname</i>, <i>annotationtype</i>, <i>returntype</i>, and
     <i>argumenttype</i> can contain wildcards: '<code><b>?</b></code>' for a
     single character, '<code><b>*</b></code>' for any number of characters
     (but not the package separator), '<code><b>**</b></code>' for any number
     of (any) characters, '<code><b>%</b></code>' for any primitive type,
-    '<code><b>***</b></code>' for any type, and '<code><b>...</b></code>' for       any number of arguments..
+    '<code><b>***</b></code>' for any type, and '<code><b>...</b></code>' for       any number of arguments.</li>
 <li><i>fieldname</i> and <i>methodname</i> can contain wildcards as well:
     '<code><b>?</b></code>' for a single character and '<code><b>*</b></code>'
-    for any number of characters.
+    for any number of characters.</li>
 </ul>
-<p>
 
-<hr>
+<hr />
 <address>
-Copyright &copy; 2002-2009
-<a href="http://www.graphics.cornell.edu/~eric/">Eric Lafortune</a>.
+Copyright &copy; 2002-2015
+<a target="other" href="http://www.lafortune.eu/">Eric Lafortune</a> @ <a target="top" href="http://www.guardsquare.com/">GuardSquare</a>.
 </address>
 </body>
 </html>
