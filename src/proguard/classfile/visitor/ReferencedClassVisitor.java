@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -48,7 +48,7 @@ implements   ClassVisitor,
              AnnotationVisitor,
              ElementValueVisitor
 {
-    private final ClassVisitor classVisitor;
+    protected final ClassVisitor classVisitor;
 
 
     public ReferencedClassVisitor(ClassVisitor classVisitor)
@@ -123,10 +123,24 @@ implements   ClassVisitor,
     }
 
 
+    public void visitInvokeDynamicConstant(Clazz clazz, InvokeDynamicConstant invokeDynamicConstant)
+    {
+        // Let the visitor visit the class referenced in the reference constant.
+        invokeDynamicConstant.referencedClassesAccept(classVisitor);
+    }
+
+
     public void visitClassConstant(Clazz clazz, ClassConstant classConstant)
     {
         // Let the visitor visit the class referenced in the class constant.
         classConstant.referencedClassAccept(classVisitor);
+    }
+
+
+    public void visitMethodTypeConstant(Clazz clazz, MethodTypeConstant methodTypeConstant)
+    {
+        // Let the visitor visit the classes referenced in the method type constant.
+        methodTypeConstant.referencedClassesAccept(classVisitor);
     }
 
 
@@ -237,6 +251,13 @@ implements   ClassVisitor,
     {
         // Let the visitor visit the classes referenced in the class element value.
         classElementValue.referencedClassesAccept(classVisitor);
+    }
+
+
+    public void visitAnnotationElementValue(Clazz clazz, Annotation annotation, AnnotationElementValue annotationElementValue)
+    {
+        // Visit the contained annotation.
+        annotationElementValue.annotationAccept(clazz, this);
     }
 
 

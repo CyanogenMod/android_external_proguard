@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -34,6 +34,8 @@ public class ClassOptimizationInfo
     private boolean isInstanceofed                = false;
     private boolean isDotClassed                  = false;
     private boolean isCaught                      = false;
+    private boolean isSimpleEnum                  = false;
+    private boolean containsStaticInitializer     = false;
     private boolean containsPackageVisibleMembers = false;
     private boolean invokesPackageVisibleMembers  = false;
     private Clazz   targetClass;
@@ -87,6 +89,30 @@ public class ClassOptimizationInfo
     }
 
 
+    public void setSimpleEnum(boolean simple)
+    {
+        isSimpleEnum = simple;
+    }
+
+
+    public boolean isSimpleEnum()
+    {
+        return isSimpleEnum;
+    }
+
+
+    public void setContainsStaticInitializer()
+    {
+        containsStaticInitializer = true;
+    }
+
+
+    public boolean containsStaticInitializer()
+    {
+        return containsStaticInitializer;
+    }
+
+
     public void setContainsPackageVisibleMembers()
     {
         containsPackageVisibleMembers = true;
@@ -129,6 +155,7 @@ public class ClassOptimizationInfo
         this.isInstanceofed                |= other.isInstanceofed;
         this.isDotClassed                  |= other.isDotClassed;
         this.isCaught                      |= other.isCaught;
+        this.containsStaticInitializer     |= other.containsStaticInitializer;
         this.containsPackageVisibleMembers |= other.containsPackageVisibleMembers;
         this.invokesPackageVisibleMembers  |= other.invokesPackageVisibleMembers;
     }
@@ -143,7 +170,6 @@ public class ClassOptimizationInfo
     public static ClassOptimizationInfo getClassOptimizationInfo(Clazz clazz)
     {
         Object visitorInfo = clazz.getVisitorInfo();
-
         return visitorInfo instanceof ClassOptimizationInfo ?
             (ClassOptimizationInfo)visitorInfo :
             null;

@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -66,21 +66,21 @@ implements   InstructionVisitor,
         new MethodrefConstant(1, 2, null, null),
         new ClassConstant(3, null),
         new NameAndTypeConstant(4, 5),
-        new Utf8Constant(ClassConstants.INTERNAL_NAME_JAVA_LANG_CLASS),
-        new Utf8Constant(ClassConstants.INTERNAL_METHOD_NAME_CLASS_FOR_NAME),
-        new Utf8Constant(ClassConstants.INTERNAL_METHOD_TYPE_CLASS_FOR_NAME),
+        new Utf8Constant(ClassConstants.NAME_JAVA_LANG_CLASS),
+        new Utf8Constant(ClassConstants.METHOD_NAME_CLASS_FOR_NAME),
+        new Utf8Constant(ClassConstants.METHOD_TYPE_CLASS_FOR_NAME),
 
         // 6
         new MethodrefConstant(1, 7, null, null),
         new NameAndTypeConstant(8, 9),
-        new Utf8Constant(ClassConstants.INTERNAL_METHOD_NAME_NEW_INSTANCE),
-        new Utf8Constant(ClassConstants.INTERNAL_METHOD_TYPE_NEW_INSTANCE),
+        new Utf8Constant(ClassConstants.METHOD_NAME_NEW_INSTANCE),
+        new Utf8Constant(ClassConstants.METHOD_TYPE_NEW_INSTANCE),
 
         // 10
         new MethodrefConstant(1, 11, null, null),
         new NameAndTypeConstant(12, 13),
-        new Utf8Constant(ClassConstants.INTERNAL_METHOD_NAME_CLASS_GET_COMPONENT_TYPE),
-        new Utf8Constant(ClassConstants.INTERNAL_METHOD_TYPE_CLASS_GET_COMPONENT_TYPE),
+        new Utf8Constant(ClassConstants.METHOD_NAME_CLASS_GET_COMPONENT_TYPE),
+        new Utf8Constant(ClassConstants.METHOD_TYPE_CLASS_GET_COMPONENT_TYPE),
     };
 
     // Class.forName("SomeClass").
@@ -103,15 +103,15 @@ implements   InstructionVisitor,
 //    {
 //        new MethodrefConstant(A, 1, null, null),
 //        new NameAndTypeConstant(2, 3),
-//        new Utf8Constant(ClassConstants.INTERNAL_METHOD_NAME_DOT_CLASS_JAVAC),
-//        new Utf8Constant(ClassConstants.INTERNAL_METHOD_TYPE_DOT_CLASS_JAVAC),
+//        new Utf8Constant(ClassConstants.METHOD_NAME_DOT_CLASS_JAVAC),
+//        new Utf8Constant(ClassConstants.METHOD_TYPE_DOT_CLASS_JAVAC),
 //    };
 
     private final Constant[] DOT_CLASS_JAVAC_CONSTANTS = new Constant[]
     {
         new MethodrefConstant(A, 1, null, null),
         new NameAndTypeConstant(B, 2),
-        new Utf8Constant(ClassConstants.INTERNAL_METHOD_TYPE_DOT_CLASS_JAVAC),
+        new Utf8Constant(ClassConstants.METHOD_TYPE_DOT_CLASS_JAVAC),
     };
 
     // SomeClass.class = class$("SomeClass") (javac).
@@ -126,15 +126,15 @@ implements   InstructionVisitor,
 //    {
 //        new MethodrefConstant(A, 1, null, null),
 //        new NameAndTypeConstant(2, 3),
-//        new Utf8Constant(ClassConstants.INTERNAL_METHOD_NAME_DOT_CLASS_JIKES),
-//        new Utf8Constant(ClassConstants.INTERNAL_METHOD_TYPE_DOT_CLASS_JIKES),
+//        new Utf8Constant(ClassConstants.METHOD_NAME_DOT_CLASS_JIKES),
+//        new Utf8Constant(ClassConstants.METHOD_TYPE_DOT_CLASS_JIKES),
 //    };
 
     private final Constant[] DOT_CLASS_JIKES_CONSTANTS = new Constant[]
     {
         new MethodrefConstant(A, 1, null, null),
         new NameAndTypeConstant(B, 2),
-        new Utf8Constant(ClassConstants.INTERNAL_METHOD_TYPE_DOT_CLASS_JIKES),
+        new Utf8Constant(ClassConstants.METHOD_TYPE_DOT_CLASS_JIKES),
     };
 
     // SomeClass.class = class("SomeClass", false) (jikes).
@@ -240,6 +240,19 @@ implements   InstructionVisitor,
 
     public void visitAnyInstruction(Clazz clazz, Method method, CodeAttribute codeAttribute, int offset, Instruction instruction)
     {
+        // Try to match the (SomeClass)Class.forName(someName).newInstance()
+        // construct. Apply this matcher first, so the next matcher can still
+        // reset it after the first instruction.
+        instruction.accept(clazz, method, codeAttribute, offset,
+                           classForNameCastMatcher);
+
+        // Did we find a match?
+        if (classForNameCastMatcher.isMatching())
+        {
+            // Print out a note about the construct.
+            clazz.constantPoolEntryAccept(classForNameCastMatcher.matchedConstantIndex(X), this);
+        }
+
         // Try to match the Class.forName("SomeClass") construct.
         instruction.accept(clazz, method, codeAttribute, offset,
                            constantClassForNameMatcher);
@@ -252,18 +265,6 @@ implements   InstructionVisitor,
 
             // Don't look for the dynamic construct.
             classForNameCastMatcher.reset();
-        }
-
-        // Try to match the (SomeClass)Class.forName(someName).newInstance()
-        // construct.
-        instruction.accept(clazz, method, codeAttribute, offset,
-                           classForNameCastMatcher);
-
-        // Did we find a match?
-        if (classForNameCastMatcher.isMatching())
-        {
-            // Print out a note about the construct.
-            clazz.constantPoolEntryAccept(classForNameCastMatcher.matchedConstantIndex(X), this);
         }
 
         // Try to match the javac .class construct.
@@ -301,7 +302,8 @@ implements   InstructionVisitor,
     {
         // Save a reference to the corresponding class.
         String externalClassName = stringConstant.getString(clazz);
-        String internalClassName = ClassUtil.internalClassName(externalClassName);
+        String internalClassName = ClassUtil.internalClassName(
+                                   ClassUtil.externalBaseType(externalClassName));
 
         stringConstant.referencedClass = findClass(clazz.getName(), internalClassName);
     }
@@ -335,22 +337,22 @@ implements   InstructionVisitor,
         String methodType = methodrefConstant.getType(clazz);
 
         // Do the method's class and type match?
-        if (methodType.equals(ClassConstants.INTERNAL_METHOD_TYPE_DOT_CLASS_JAVAC) ||
-            methodType.equals(ClassConstants.INTERNAL_METHOD_TYPE_DOT_CLASS_JIKES))
+        if (methodType.equals(ClassConstants.METHOD_TYPE_DOT_CLASS_JAVAC) ||
+            methodType.equals(ClassConstants.METHOD_TYPE_DOT_CLASS_JIKES))
         {
             String methodName = methodrefConstant.getName(clazz);
 
             // Does the method's name match one of the special names?
             isClassForNameInvocation =
-                methodName.equals(ClassConstants.INTERNAL_METHOD_NAME_DOT_CLASS_JAVAC) ||
-                methodName.equals(ClassConstants.INTERNAL_METHOD_NAME_DOT_CLASS_JIKES);
+                methodName.equals(ClassConstants.METHOD_NAME_DOT_CLASS_JAVAC) ||
+                methodName.equals(ClassConstants.METHOD_NAME_DOT_CLASS_JIKES);
 
             if (isClassForNameInvocation)
             {
                 return;
             }
 
-            String className  = methodrefConstant.getClassName(clazz);
+            String className = methodrefConstant.getClassName(clazz);
 
             // Note that we look for the class by name, since the referenced
             // class has not been initialized yet.
@@ -434,11 +436,17 @@ implements   InstructionVisitor,
      */
     private Clazz findClass(String referencingClassName, String name)
     {
-        // Ignore any primitive array types.
-        if (ClassUtil.isInternalArrayType(name) &&
-            !ClassUtil.isInternalClassType(name))
+        // Is it an array type?
+        if (ClassUtil.isInternalArrayType(name))
         {
-            return null;
+            // Ignore any primitive array types.
+            if (!ClassUtil.isInternalClassType(name))
+            {
+                return null;
+            }
+
+            // Strip the array part.
+            name = ClassUtil.internalClassNameFromClassType(name);
         }
 
         // First look for the class in the program class pool.

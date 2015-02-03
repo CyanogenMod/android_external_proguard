@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -81,6 +81,15 @@ public class MultiAttributeVisitor implements AttributeVisitor
         for (int index = 0; index < attributeVisitors.length; index++)
         {
             attributeVisitors[index].visitUnknownAttribute(clazz, unknownAttribute);
+        }
+    }
+
+
+    public void visitBootstrapMethodsAttribute(Clazz clazz, BootstrapMethodsAttribute bootstrapMethodsAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitBootstrapMethodsAttribute(clazz, bootstrapMethodsAttribute);
         }
     }
 
@@ -207,6 +216,15 @@ public class MultiAttributeVisitor implements AttributeVisitor
         for (int index = 0; index < attributeVisitors.length; index++)
         {
             attributeVisitors[index].visitConstantValueAttribute(clazz, field, constantValueAttribute);
+        }
+    }
+
+
+    public void visitMethodParametersAttribute(Clazz clazz, Method method, MethodParametersAttribute methodParametersAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitMethodParametersAttribute(clazz, method, methodParametersAttribute);
         }
     }
 
@@ -342,6 +360,78 @@ public class MultiAttributeVisitor implements AttributeVisitor
         for (int index = 0; index < attributeVisitors.length; index++)
         {
             attributeVisitors[index].visitRuntimeInvisibleParameterAnnotationsAttribute(clazz, method, runtimeInvisibleParameterAnnotationsAttribute);
+        }
+    }
+
+
+    public void visitRuntimeVisibleTypeAnnotationsAttribute(Clazz clazz, RuntimeVisibleTypeAnnotationsAttribute runtimeVisibleTypeAnnotationsAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitRuntimeVisibleTypeAnnotationsAttribute(clazz, runtimeVisibleTypeAnnotationsAttribute);
+        }
+    }
+
+
+    public void visitRuntimeVisibleTypeAnnotationsAttribute(Clazz clazz, Field field, RuntimeVisibleTypeAnnotationsAttribute runtimeVisibleTypeAnnotationsAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitRuntimeVisibleTypeAnnotationsAttribute(clazz, field, runtimeVisibleTypeAnnotationsAttribute);
+        }
+    }
+
+
+    public void visitRuntimeVisibleTypeAnnotationsAttribute(Clazz clazz, Method method, RuntimeVisibleTypeAnnotationsAttribute runtimeVisibleTypeAnnotationsAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitRuntimeVisibleTypeAnnotationsAttribute(clazz, method, runtimeVisibleTypeAnnotationsAttribute);
+        }
+    }
+
+
+    public void visitRuntimeVisibleTypeAnnotationsAttribute(Clazz clazz, Method method, CodeAttribute codeAttribute, RuntimeVisibleTypeAnnotationsAttribute runtimeVisibleTypeAnnotationsAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitRuntimeVisibleTypeAnnotationsAttribute(clazz, method, codeAttribute, runtimeVisibleTypeAnnotationsAttribute);
+        }
+    }
+
+
+    public void visitRuntimeInvisibleTypeAnnotationsAttribute(Clazz clazz, RuntimeInvisibleTypeAnnotationsAttribute runtimeInvisibleTypeAnnotationsAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitRuntimeInvisibleTypeAnnotationsAttribute(clazz, runtimeInvisibleTypeAnnotationsAttribute);
+        }
+    }
+
+
+    public void visitRuntimeInvisibleTypeAnnotationsAttribute(Clazz clazz, Field field, RuntimeInvisibleTypeAnnotationsAttribute runtimeInvisibleTypeAnnotationsAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitRuntimeInvisibleTypeAnnotationsAttribute(clazz, field, runtimeInvisibleTypeAnnotationsAttribute);
+        }
+    }
+
+
+    public void visitRuntimeInvisibleTypeAnnotationsAttribute(Clazz clazz, Method method, RuntimeInvisibleTypeAnnotationsAttribute runtimeInvisibleTypeAnnotationsAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitRuntimeInvisibleTypeAnnotationsAttribute(clazz, method, runtimeInvisibleTypeAnnotationsAttribute);
+        }
+    }
+
+
+    public void visitRuntimeInvisibleTypeAnnotationsAttribute(Clazz clazz, Method method, CodeAttribute codeAttribute, RuntimeInvisibleTypeAnnotationsAttribute runtimeInvisibleTypeAnnotationsAttribute)
+    {
+        for (int index = 0; index < attributeVisitors.length; index++)
+        {
+            attributeVisitors[index].visitRuntimeInvisibleTypeAnnotationsAttribute(clazz, method, codeAttribute, runtimeInvisibleTypeAnnotationsAttribute);
         }
     }
 

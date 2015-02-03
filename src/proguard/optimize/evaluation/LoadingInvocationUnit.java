@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -26,7 +26,7 @@ import proguard.evaluation.BasicInvocationUnit;
 import proguard.evaluation.value.*;
 
 /**
- * This InvocationUbit loads parameter values and return values that were
+ * This InvocationUnit loads parameter values and return values that were
  * previously stored with the methods that are invoked.
  *
  * @see StoringInvocationUnit
@@ -35,9 +35,9 @@ import proguard.evaluation.value.*;
 public class LoadingInvocationUnit
 extends      BasicInvocationUnit
 {
-    private boolean loadFieldValues;
-    private boolean loadMethodParameterValues;
-    private boolean loadMethodReturnValues;
+    private final boolean loadFieldValues;
+    private final boolean loadMethodParameterValues;
+    private final boolean loadMethodReturnValues;
 
 
     /**
@@ -45,7 +45,7 @@ extends      BasicInvocationUnit
      */
     public LoadingInvocationUnit(ValueFactory valueFactory)
     {
-        this(valueFactory, false, false, false);
+        this(valueFactory, true, true, true);
     }
 
 
@@ -80,12 +80,9 @@ extends      BasicInvocationUnit
             {
                 // Retrieve the stored field class value.
                 ReferenceValue value = StoringInvocationUnit.getFieldClassValue((Field)referencedMember);
-                if (value != null &&
-                    value.isParticular())
+                if (value != null)
                 {
                     return value;
-//                // Make sure the value is refreshed.
-//                return refresh(value);
                 }
             }
         }
@@ -106,12 +103,9 @@ extends      BasicInvocationUnit
             {
                 // Retrieve the stored field value.
                 Value value = StoringInvocationUnit.getFieldValue((Field)referencedMember);
-                if (value != null &&
-                    value.isParticular())
+                if (value != null)
                 {
                     return value;
-//                // Make sure the value is refreshed.
-//                return refresh(value);
                 }
             }
         }
@@ -130,12 +124,9 @@ extends      BasicInvocationUnit
         {
             // Retrieve the stored method parameter value.
             Value value = StoringInvocationUnit.getMethodParameterValue(method, parameterIndex);
-            if (value != null &&
-                value.isParticular())
+            if (value != null)
             {
                 return value;
-//            // Make sure the value is refreshed.
-//            return refresh(value);
             }
         }
 
@@ -159,12 +150,9 @@ extends      BasicInvocationUnit
             {
                 // Retrieve the stored method return value.
                 Value value = StoringInvocationUnit.getMethodReturnValue((Method)referencedMember);
-                if (value != null &&
-                    value.isParticular())
+                if (value != null)
                 {
                     return value;
-//                // Make sure the value is refreshed.
-//                return refresh(value);
                 }
             }
         }
@@ -173,31 +161,4 @@ extends      BasicInvocationUnit
                                           refConstant,
                                           type);
     }
-//
-//
-//    // Small utility methods.
-//
-//    private Value refresh(Value value)
-//    {
-//        if (value.isParticular())
-//        {
-//            return value;
-//        }
-//
-//        switch (value.computationalType())
-//        {
-//            case Value.TYPE_INTEGER: return valueFactory.createIntegerValue();
-//            case Value.TYPE_LONG:    return valueFactory.createLongValue();
-//            case Value.TYPE_FLOAT:   return valueFactory.createFloatValue();
-//            case Value.TYPE_DOUBLE:  return valueFactory.createDoubleValue();
-//            default:
-//            {
-//                ReferenceValue referenceValue = value.referenceValue();
-//
-//                return valueFactory.createReferenceValue(referenceValue.getType(),
-//                                                         referenceValue.getReferencedClass(),
-//                                                         referenceValue.isNull() != Value.NEVER);
-//            }
-//        }
-//    }
 }

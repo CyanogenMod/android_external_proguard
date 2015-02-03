@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -54,47 +54,6 @@ public class OutputWriter
     public void execute(ClassPool programClassPool) throws IOException
     {
         ClassPath programJars = configuration.programJars;
-
-        // Perform a check on the first jar.
-        ClassPathEntry firstEntry = programJars.get(0);
-        if (firstEntry.isOutput())
-        {
-            throw new IOException("The output jar [" + firstEntry.getName() +
-                                  "] must be specified after an input jar, or it will be empty.");
-        }
-
-        // Perform some checks on the output jars.
-        for (int index = 0; index < programJars.size() - 1; index++)
-        {
-            ClassPathEntry entry = programJars.get(index);
-            if (entry.isOutput())
-            {
-                // Check if all but the last output jars have filters.
-                if (entry.getFilter()    == null &&
-                    entry.getJarFilter() == null &&
-                    entry.getWarFilter() == null &&
-                    entry.getEarFilter() == null &&
-                    entry.getZipFilter() == null &&
-                    programJars.get(index + 1).isOutput())
-                {
-                    throw new IOException("The output jar [" + entry.getName() +
-                                          "] must have a filter, or all subsequent jars will be empty.");
-                }
-
-                // Check if the output jar name is different from the input jar names.
-                for (int inIndex = 0; inIndex < programJars.size(); inIndex++)
-                {
-                    ClassPathEntry otherEntry = programJars.get(inIndex);
-
-                    if (!otherEntry.isOutput() &&
-                        entry.getFile().equals(otherEntry.getFile()))
-                    {
-                        throw new IOException("The output jar [" + entry.getName() +
-                                              "] must be different from all input jars.");
-                    }
-                }
-            }
-        }
 
         int firstInputIndex = 0;
         int lastInputIndex  = 0;
@@ -160,30 +119,34 @@ public class OutputWriter
 
             DataEntryReader resourceRewriter = resourceCopier;
 
-            // Wrap the resource writer with a filter and a data entry rewriter,
-            // if required.
-            if (configuration.adaptResourceFileContents != null)
+            // Adapt resource file contents and names, if necessary.
+            if (configuration.obfuscate)
             {
-                resourceRewriter =
-                    new NameFilter(configuration.adaptResourceFileContents,
-                    new NameFilter("META-INF/**",
-                        new ManifestRewriter(programClassPool, writer),
-                        new DataEntryRewriter(programClassPool, writer)),
-                    resourceRewriter);
-            }
+                // Wrap the resource writer with a filter and a data entry
+                // rewriter, if required.
+                if (configuration.adaptResourceFileContents != null)
+                {
+                    resourceRewriter =
+                        new NameFilter(configuration.adaptResourceFileContents,
+                        new NameFilter("META-INF/MANIFEST.MF,META-INF/*.SF",
+                            new ManifestRewriter(programClassPool, writer),
+                            new DataEntryRewriter(programClassPool, writer)),
+                        resourceRewriter);
+                }
 
-            // Wrap the resource writer with a filter and a data entry renamer,
-            // if required.
-            if (configuration.adaptResourceFileNames != null)
-            {
-                Map packagePrefixMap = createPackagePrefixMap(programClassPool);
+                // Wrap the resource writer with a filter and a data entry
+                // renamer, if required.
+                if (configuration.adaptResourceFileNames != null)
+                {
+                    Map packagePrefixMap = createPackagePrefixMap(programClassPool);
 
-                resourceRewriter =
-                    new NameFilter(configuration.adaptResourceFileNames,
-                    new DataEntryObfuscator(programClassPool,
-                                            packagePrefixMap,
-                                            resourceRewriter),
-                    resourceRewriter);
+                    resourceRewriter =
+                        new NameFilter(configuration.adaptResourceFileNames,
+                        new DataEntryObfuscator(programClassPool,
+                                                packagePrefixMap,
+                                                resourceRewriter),
+                        resourceRewriter);
+                }
             }
 
             DataEntryReader directoryRewriter = null;
@@ -221,7 +184,7 @@ public class OutputWriter
         }
         catch (IOException ex)
         {
-            throw new IOException("Can't write [" + classPath.get(fromOutputIndex).getName() + "] (" + ex.getMessage() + ")");
+            throw (IOException)new IOException("Can't write [" + classPath.get(fromOutputIndex).getName() + "] (" + ex.getMessage() + ")").initCause(ex);
         }
     }
 
@@ -232,25 +195,25 @@ public class OutputWriter
      */
     private static Map createPackagePrefixMap(ClassPool classPool)
     {
-        Map PackagePrefixMap = new HashMap();
+        Map packagePrefixMap = new HashMap();
 
         Iterator iterator = classPool.classNames();
         while (iterator.hasNext())
         {
             String className     = (String)iterator.next();
-            String PackagePrefix = ClassUtil.internalPackagePrefix(className);
+            String packagePrefix = ClassUtil.internalPackagePrefix(className);
 
-            String mappedNewPackagePrefix = (String)PackagePrefixMap.get(PackagePrefix);
+            String mappedNewPackagePrefix = (String)packagePrefixMap.get(packagePrefix);
             if (mappedNewPackagePrefix == null ||
-                !mappedNewPackagePrefix.equals(PackagePrefix))
+                !mappedNewPackagePrefix.equals(packagePrefix))
             {
                 String newClassName     = classPool.getClass(className).getName();
                 String newPackagePrefix = ClassUtil.internalPackagePrefix(newClassName);
 
-                PackagePrefixMap.put(PackagePrefix, newPackagePrefix);
+                packagePrefixMap.put(packagePrefix, newPackagePrefix);
             }
         }
 
-        return PackagePrefixMap;
+        return packagePrefixMap;
     }
 }

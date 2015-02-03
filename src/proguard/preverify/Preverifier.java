@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -54,21 +54,15 @@ public class Preverifier
         programClassPool.classesAccept(new ClassCleaner());
 
         // Preverify all methods.
-        ClassVisitor preverifier =
+        // Classes for JME must be preverified.
+        // Classes for JSE 6 may optionally be preverified.
+        // Classes for JSE 7 or higher must be preverified.
+        programClassPool.classesAccept(
+            new ClassVersionFilter(configuration.microEdition ?
+                                       ClassConstants.CLASS_VERSION_1_0 :
+                                       ClassConstants.CLASS_VERSION_1_6,
             new AllMethodVisitor(
             new AllAttributeVisitor(
-            new CodePreverifier(configuration.microEdition)));
-
-        // In Java Standard Edition, only class files from Java 6 or higher
-        // should be preverified.
-        if (!configuration.microEdition)
-        {
-            preverifier =
-                new ClassVersionFilter(ClassConstants.INTERNAL_CLASS_VERSION_1_6,
-                                       Integer.MAX_VALUE,
-                                       preverifier);
-        }
-
-        programClassPool.classesAccept(preverifier);
+            new CodePreverifier(configuration.microEdition)))));
     }
 }

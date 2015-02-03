@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -117,8 +117,7 @@ public class ProgramClass implements Clazz
         }
         catch (ClassCastException ex)
         {
-            new ClassPrinter().visitProgramClass(this);
-            throw new ClassCastException("Expected Utf8Constant at index ["+constantIndex+"] in class ["+getName()+"], found ["+ex.getMessage()+"]");
+            throw ((IllegalStateException)new IllegalStateException("Expected Utf8Constant at index ["+constantIndex+"] in class ["+getName()+"]").initCause(ex));
         }
     }
 
@@ -130,7 +129,7 @@ public class ProgramClass implements Clazz
         }
         catch (ClassCastException ex)
         {
-            throw new ClassCastException("Expected StringConstant at index ["+constantIndex+"] in class ["+getName()+"], found ["+ex.getMessage()+"]");
+            throw ((IllegalStateException)new IllegalStateException("Expected StringConstant at index ["+constantIndex+"] in class ["+getName()+"]").initCause(ex));
         }
     }
 
@@ -142,7 +141,7 @@ public class ProgramClass implements Clazz
         }
         catch (ClassCastException ex)
         {
-            throw new ClassCastException("Expected ClassConstant at index ["+constantIndex+"] in class ["+getName()+"], found ["+ex.getMessage()+"]");
+            throw ((IllegalStateException)new IllegalStateException("Expected ClassConstant at index ["+constantIndex+"]").initCause(ex));
         }
     }
 
@@ -154,7 +153,7 @@ public class ProgramClass implements Clazz
         }
         catch (ClassCastException ex)
         {
-            throw new ClassCastException("Expected NameAndTypeConstant at index ["+constantIndex+"] in class ["+getName()+"], found ["+ex.getMessage()+"]");
+            throw ((IllegalStateException)new IllegalStateException("Expected NameAndTypeConstant at index ["+constantIndex+"] in class ["+getName()+"]").initCause(ex));
         }
     }
 
@@ -166,7 +165,44 @@ public class ProgramClass implements Clazz
         }
         catch (ClassCastException ex)
         {
-            throw new ClassCastException("Expected NameAndTypeConstant at index ["+constantIndex+"] in class ["+getName()+"], found ["+ex.getMessage()+"]");
+            throw ((IllegalStateException)new IllegalStateException("Expected NameAndTypeConstant at index ["+constantIndex+"] in class ["+getName()+"]").initCause(ex));
+        }
+    }
+
+
+    public String getRefClassName(int constantIndex)
+    {
+        try
+        {
+            return ((RefConstant)constantPool[constantIndex]).getClassName(this);
+        }
+        catch (ClassCastException ex)
+        {
+            throw ((IllegalStateException)new IllegalStateException("Expected RefConstant at index ["+constantIndex+"] in class ["+getName()+"]").initCause(ex));
+        }
+    }
+
+    public String getRefName(int constantIndex)
+    {
+        try
+        {
+            return ((RefConstant)constantPool[constantIndex]).getName(this);
+        }
+        catch (ClassCastException ex)
+        {
+            throw ((IllegalStateException)new IllegalStateException("Expected RefConstant at index ["+constantIndex+"] in class ["+getName()+"]").initCause(ex));
+        }
+    }
+
+    public String getRefType(int constantIndex)
+    {
+        try
+        {
+            return ((RefConstant)constantPool[constantIndex]).getType(this);
+        }
+        catch (ClassCastException ex)
+        {
+            throw ((IllegalStateException)new IllegalStateException("Expected RefConstant at index ["+constantIndex+"] in class ["+getName()+"]").initCause(ex));
         }
     }
 
@@ -216,6 +252,19 @@ public class ProgramClass implements Clazz
     }
 
 
+    public boolean extends_(String className)
+    {
+        if (getName().equals(className))
+        {
+            return true;
+        }
+
+        Clazz superClass = getSuperClass();
+        return superClass != null &&
+               superClass.extends_(className);
+    }
+
+
     public boolean extendsOrImplements(Clazz clazz)
     {
         if (this.equals(clazz))
@@ -235,6 +284,34 @@ public class ProgramClass implements Clazz
             Clazz interfaceClass = getInterface(index);
             if (interfaceClass != null &&
                 interfaceClass.extendsOrImplements(clazz))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    public boolean extendsOrImplements(String className)
+    {
+        if (getName().equals(className))
+        {
+            return true;
+        }
+
+        Clazz superClass = getSuperClass();
+        if (superClass != null &&
+            superClass.extendsOrImplements(className))
+        {
+            return true;
+        }
+
+        for (int index = 0; index < u2interfacesCount; index++)
+        {
+            Clazz interfaceClass = getInterface(index);
+            if (interfaceClass != null &&
+                interfaceClass.extendsOrImplements(className))
             {
                 return true;
             }
@@ -454,12 +531,12 @@ public class ProgramClass implements Clazz
     public boolean mayHaveImplementations(Method method)
     {
         return
-            (u2accessFlags & ClassConstants.INTERNAL_ACC_FINAL) == 0 &&
+            (u2accessFlags & ClassConstants.ACC_FINAL) == 0 &&
             (method == null ||
-             ((method.getAccessFlags() & (ClassConstants.INTERNAL_ACC_PRIVATE |
-                                          ClassConstants.INTERNAL_ACC_STATIC  |
-                                          ClassConstants.INTERNAL_ACC_FINAL)) == 0 &&
-              !method.getName(this).equals(ClassConstants.INTERNAL_METHOD_NAME_INIT)));
+             ((method.getAccessFlags() & (ClassConstants.ACC_PRIVATE |
+                                          ClassConstants.ACC_STATIC  |
+                                          ClassConstants.ACC_FINAL)) == 0 &&
+              !method.getName(this).equals(ClassConstants.METHOD_NAME_INIT)));
     }
 
 
@@ -468,6 +545,19 @@ public class ProgramClass implements Clazz
         for (int index = 0; index < u2attributesCount; index++)
         {
             attributes[index].accept(this, attributeVisitor);
+        }
+    }
+
+
+    public void attributeAccept(String name, AttributeVisitor attributeVisitor)
+    {
+        for (int index = 0; index < u2attributesCount; index++)
+        {
+            Attribute attribute = attributes[index];
+            if (attribute.getAttributeName(this).equals(name))
+            {
+                attribute.accept(this, attributeVisitor);
+            }
         }
     }
 

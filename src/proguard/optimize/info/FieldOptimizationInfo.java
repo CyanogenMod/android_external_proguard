@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -21,7 +21,10 @@
 package proguard.optimize.info;
 
 import proguard.classfile.*;
-import proguard.classfile.util.MethodLinker;
+import proguard.classfile.attribute.*;
+import proguard.classfile.attribute.visitor.*;
+import proguard.classfile.util.SimplifiedVisitor;
+import proguard.evaluation.ConstantValueFactory;
 import proguard.evaluation.value.*;
 
 /**
@@ -31,8 +34,12 @@ import proguard.evaluation.value.*;
  * @author Eric Lafortune
  */
 public class FieldOptimizationInfo
+extends      SimplifiedVisitor
+implements   AttributeVisitor
 {
-    private static final SpecificValueFactory VALUE_FACTORY = new SpecificValueFactory();
+    private static final ParticularValueFactory VALUE_FACTORY          = new ParticularValueFactory();
+    private static final ConstantValueFactory   CONSTANT_VALUE_FACTORY = new ConstantValueFactory(VALUE_FACTORY);
+    private static final InitialValueFactory    INITIAL_VALUE_FACTORY  = new InitialValueFactory(VALUE_FACTORY);
 
     private boolean        isWritten;
     private boolean        isRead;
@@ -43,9 +50,22 @@ public class FieldOptimizationInfo
 
     public FieldOptimizationInfo(Clazz clazz, Field field)
     {
+        int accessFlags = field.getAccessFlags();
+
         isWritten =
-        isRead    = (field.getAccessFlags() & ClassConstants.INTERNAL_ACC_VOLATILE) != 0;
-        value     = initialValue(field.getDescriptor(clazz));
+        isRead    = (accessFlags & ClassConstants.ACC_VOLATILE) != 0;
+
+        resetValue(clazz, field);
+    }
+
+
+    public FieldOptimizationInfo(FieldOptimizationInfo FieldOptimizationInfo)
+    {
+        this.isWritten        = FieldOptimizationInfo.isWritten;
+        this.isRead           = FieldOptimizationInfo.isRead;
+        this.canBeMadePrivate = FieldOptimizationInfo.canBeMadePrivate;
+        this.referencedClass  = FieldOptimizationInfo.referencedClass;
+        this.value            = FieldOptimizationInfo.value;
     }
 
 
@@ -99,6 +119,30 @@ public class FieldOptimizationInfo
     }
 
 
+    public void resetValue(Clazz clazz, Field field)
+    {
+        int accessFlags = field.getAccessFlags();
+
+        value = null;
+
+        // See if we can initialize a static field with a constant value.
+        if ((accessFlags & ClassConstants.ACC_STATIC) != 0)
+        {
+            field.accept(clazz, new AllAttributeVisitor(this));
+        }
+
+        // Otherwise initialize a non-final field with the default value.
+        // Conservatively, even a final field needs to be initialized with the
+        // default value, because it may be accessed before it is set.
+        if (value == null &&
+            (SideEffectInstructionChecker.OPTIMIZE_CONSERVATIVELY ||
+             (accessFlags & ClassConstants.ACC_FINAL) == 0))
+        {
+            value = INITIAL_VALUE_FACTORY.createValue(field.getDescriptor(clazz));
+        }
+    }
+
+
     public void generalizeValue(Value value)
     {
         this.value = this.value != null ?
@@ -113,47 +157,29 @@ public class FieldOptimizationInfo
     }
 
 
-    // Small utility methods.
+    // Implementations for AttributeVisitor.
 
-    private Value initialValue(String type)
+    public void visitAnyAttribute(Clazz clazz, Attribute attribute) {}
+
+
+    public void visitConstantValueAttribute(Clazz clazz, Field field, ConstantValueAttribute constantValueAttribute)
     {
-        switch (type.charAt(0))
-        {
-            case ClassConstants.INTERNAL_TYPE_BOOLEAN:
-            case ClassConstants.INTERNAL_TYPE_BYTE:
-            case ClassConstants.INTERNAL_TYPE_CHAR:
-            case ClassConstants.INTERNAL_TYPE_SHORT:
-            case ClassConstants.INTERNAL_TYPE_INT:
-                return VALUE_FACTORY.createIntegerValue(0);
-
-            case ClassConstants.INTERNAL_TYPE_LONG:
-                return VALUE_FACTORY.createLongValue(0L);
-
-            case ClassConstants.INTERNAL_TYPE_FLOAT:
-                return VALUE_FACTORY.createFloatValue(0.0f);
-
-            case ClassConstants.INTERNAL_TYPE_DOUBLE:
-                return VALUE_FACTORY.createDoubleValue(0.0);
-
-            case ClassConstants.INTERNAL_TYPE_CLASS_START:
-            case ClassConstants.INTERNAL_TYPE_ARRAY:
-                return VALUE_FACTORY.createReferenceValueNull();
-
-            default:
-                throw new IllegalArgumentException("Invalid type ["+type+"]");
-        }
+        // Retrieve the initial static field value.
+        value = CONSTANT_VALUE_FACTORY.constantValue(clazz, constantValueAttribute.u2constantValueIndex);
     }
 
 
+    // Small utility methods.
+
     public static void setFieldOptimizationInfo(Clazz clazz, Field field)
     {
-        MethodLinker.lastMember(field).setVisitorInfo(new FieldOptimizationInfo(clazz, field));
+        field.setVisitorInfo(new FieldOptimizationInfo(clazz, field));
     }
 
 
     public static FieldOptimizationInfo getFieldOptimizationInfo(Field field)
     {
-        Object visitorInfo = MethodLinker.lastMember(field).getVisitorInfo();
+        Object visitorInfo = field.getVisitorInfo();
 
         return visitorInfo instanceof FieldOptimizationInfo ?
             (FieldOptimizationInfo)visitorInfo :

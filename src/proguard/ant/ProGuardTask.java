@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -25,7 +25,7 @@ import proguard.*;
 import proguard.classfile.util.ClassUtil;
 
 import java.io.*;
-import java.util.ArrayList;
+import java.util.*;
 
 /**
  * This Task allows to configure and run ProGuard from Ant.
@@ -40,24 +40,29 @@ public class ProGuardTask extends ConfigurationTask
     {
         try
         {
-            ConfigurationParser parser = new ConfigurationParser(configurationFile);
+            // Get the combined system properties and Ant properties, for
+            // replacing ProGuard-style properties ('<...>').
+            Properties properties = new Properties();
+            properties.putAll(getProject().getProperties());
 
+            ConfigurationParser parser = new ConfigurationParser(configurationFile,
+                                                                 properties);
             try
             {
                 parser.parse(configuration);
             }
-            catch (ParseException ex)
+            catch (ParseException e)
             {
-                throw new BuildException(ex.getMessage());
+                throw new BuildException(e.getMessage(), e);
             }
             finally
             {
                 parser.close();
             }
         }
-        catch (IOException ex)
+        catch (IOException e)
         {
-            throw new BuildException(ex.getMessage());
+            throw new BuildException(e.getMessage(), e);
         }
     }
 
@@ -215,6 +220,12 @@ public class ProGuardTask extends ConfigurationTask
     }
 
 
+    public void setKeepparameternames(boolean keepParameterNames)
+    {
+        configuration.keepParameterNames = keepParameterNames;
+    }
+
+
     public void setRenamesourcefileattribute(String newSourceFileAttribute)
     {
         configuration.newSourceFileAttribute = newSourceFileAttribute;
@@ -241,13 +252,39 @@ public class ProGuardTask extends ConfigurationTask
 
     public void setNote(boolean note)
     {
-        configuration.note = note ? null : new ArrayList();
+        if (note)
+        {
+            // Switch on notes if they were completely disabled.
+            if (configuration.note != null &&
+                configuration.note.isEmpty())
+            {
+                configuration.note = null;
+            }
+        }
+        else
+        {
+            // Switch off notes.
+            configuration.note = new ArrayList();
+        }
     }
 
 
     public void setWarn(boolean warn)
     {
-        configuration.warn = warn ? null : new ArrayList();
+        if (warn)
+        {
+            // Switch on warnings if they were completely disabled.
+            if (configuration.warn != null &&
+                configuration.warn.isEmpty())
+            {
+                configuration.warn = null;
+            }
+        }
+        else
+        {
+            // Switch off warnings.
+            configuration.warn = new ArrayList();
+        }
     }
 
 
@@ -278,9 +315,9 @@ public class ProGuardTask extends ConfigurationTask
             ProGuard proGuard = new ProGuard(configuration);
             proGuard.execute();
         }
-        catch (IOException ex)
+        catch (IOException e)
         {
-            throw new BuildException(ex.getMessage());
+            throw new BuildException(e.getMessage(), e);
         }
     }
 
@@ -302,7 +339,7 @@ public class ProGuardTask extends ConfigurationTask
             fileName.equalsIgnoreCase("off")    ? null :
             fileName.equalsIgnoreCase("true")  ||
             fileName.equalsIgnoreCase("yes")   ||
-            fileName.equalsIgnoreCase("on")     ? new File("")   :
+            fileName.equalsIgnoreCase("on")     ? Configuration.STD_OUT :
                                                   resolvedFile(file);
     }
 

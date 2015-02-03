@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -23,12 +23,12 @@ package proguard.optimize;
 import proguard.*;
 import proguard.classfile.*;
 import proguard.classfile.attribute.visitor.*;
-import proguard.classfile.constant.visitor.AllConstantVisitor;
+import proguard.classfile.constant.visitor.*;
 import proguard.classfile.editor.*;
 import proguard.classfile.instruction.visitor.*;
 import proguard.classfile.util.MethodLinker;
 import proguard.classfile.visitor.*;
-import proguard.evaluation.*;
+import proguard.evaluation.InvocationUnit;
 import proguard.evaluation.value.*;
 import proguard.optimize.evaluation.*;
 import proguard.optimize.info.*;
@@ -46,6 +46,7 @@ import java.util.*;
 public class Optimizer
 {
     private static final String CLASS_MARKING_FINAL            = "class/marking/final";
+    private static final String CLASS_UNBOXING_ENUM            = "class/unboxing/enum";
     private static final String CLASS_MERGING_VERTICAL         = "class/merging/vertical";
     private static final String CLASS_MERGING_HORIZONTAL       = "class/merging/horizontal";
     private static final String FIELD_REMOVAL_WRITEONLY        = "field/removal/writeonly";
@@ -66,6 +67,7 @@ public class Optimizer
     private static final String CODE_SIMPLIFICATION_CAST       = "code/simplification/cast";
     private static final String CODE_SIMPLIFICATION_FIELD      = "code/simplification/field";
     private static final String CODE_SIMPLIFICATION_BRANCH     = "code/simplification/branch";
+    private static final String CODE_SIMPLIFICATION_STRING     = "code/simplification/string";
     private static final String CODE_SIMPLIFICATION_ADVANCED   = "code/simplification/advanced";
     private static final String CODE_REMOVAL_ADVANCED          = "code/removal/advanced";
     private static final String CODE_REMOVAL_SIMPLE            = "code/removal/simple";
@@ -80,6 +82,7 @@ public class Optimizer
         CLASS_MERGING_VERTICAL,
         CLASS_MERGING_HORIZONTAL,
         FIELD_REMOVAL_WRITEONLY,
+        FIELD_MARKING_PRIVATE,
         FIELD_PROPAGATION_VALUE,
         METHOD_MARKING_PRIVATE,
         METHOD_MARKING_STATIC,
@@ -96,6 +99,7 @@ public class Optimizer
         CODE_SIMPLIFICATION_CAST,
         CODE_SIMPLIFICATION_FIELD,
         CODE_SIMPLIFICATION_BRANCH,
+        CODE_SIMPLIFICATION_STRING,
         CODE_SIMPLIFICATION_ADVANCED,
         CODE_REMOVAL_ADVANCED,
         CODE_REMOVAL_SIMPLE,
@@ -137,6 +141,7 @@ public class Optimizer
             new ConstantMatcher(true);
 
         boolean classMarkingFinal            = filter.matches(CLASS_MARKING_FINAL);
+        boolean classUnboxingEnum            = filter.matches(CLASS_UNBOXING_ENUM);
         boolean classMergingVertical         = filter.matches(CLASS_MERGING_VERTICAL);
         boolean classMergingHorizontal       = filter.matches(CLASS_MERGING_HORIZONTAL);
         boolean fieldRemovalWriteonly        = filter.matches(FIELD_REMOVAL_WRITEONLY);
@@ -157,6 +162,7 @@ public class Optimizer
         boolean codeSimplificationCast       = filter.matches(CODE_SIMPLIFICATION_CAST);
         boolean codeSimplificationField      = filter.matches(CODE_SIMPLIFICATION_FIELD);
         boolean codeSimplificationBranch     = filter.matches(CODE_SIMPLIFICATION_BRANCH);
+        boolean codeSimplificationString     = filter.matches(CODE_SIMPLIFICATION_STRING);
         boolean codeSimplificationAdvanced   = filter.matches(CODE_SIMPLIFICATION_ADVANCED);
         boolean codeRemovalAdvanced          = filter.matches(CODE_REMOVAL_ADVANCED);
         boolean codeRemovalSimple            = filter.matches(CODE_REMOVAL_SIMPLE);
@@ -166,6 +172,7 @@ public class Optimizer
 
         // Create counters to count the numbers of optimizations.
         ClassCounter       classMarkingFinalCounter            = new ClassCounter();
+        ClassCounter       classUnboxingEnumCounter            = new ClassCounter();
         ClassCounter       classMergingVerticalCounter         = new ClassCounter();
         ClassCounter       classMergingHorizontalCounter       = new ClassCounter();
         MemberCounter      fieldRemovalWriteonlyCounter        = new MemberCounter();
@@ -186,13 +193,15 @@ public class Optimizer
         InstructionCounter codeSimplificationCastCounter       = new InstructionCounter();
         InstructionCounter codeSimplificationFieldCounter      = new InstructionCounter();
         InstructionCounter codeSimplificationBranchCounter     = new InstructionCounter();
+        InstructionCounter codeSimplificationStringCounter     = new InstructionCounter();
         InstructionCounter codeSimplificationAdvancedCounter   = new InstructionCounter();
         InstructionCounter deletedCounter                      = new InstructionCounter();
         InstructionCounter addedCounter                        = new InstructionCounter();
         MemberCounter      codeRemovalVariableCounter          = new MemberCounter();
         ExceptionCounter   codeRemovalExceptionCounter         = new ExceptionCounter();
         MemberCounter      codeAllocationVariableCounter       = new MemberCounter();
-        MemberCounter      initializerFixCounter               = new MemberCounter();
+        MemberCounter      initializerFixCounter1              = new MemberCounter();
+        MemberCounter      initializerFixCounter2              = new MemberCounter();
 
         // Some optimizations are required by other optimizations.
         codeSimplificationAdvanced =
@@ -244,16 +253,61 @@ public class Optimizer
         libraryClassPool.classesAccept(new AllMemberVisitor(keepMarker));
 
         // We also keep all classes that are involved in .class constructs.
+        // We're not looking at enum classes though, so they can be simplified.
         programClassPool.classesAccept(
+            new ClassAccessFilter(0, ClassConstants.ACC_ENUM,
             new AllMethodVisitor(
             new AllAttributeVisitor(
             new AllInstructionVisitor(
-            new DotClassClassVisitor(keepMarker)))));
+            new DotClassClassVisitor(keepMarker))))));
 
-        // We also keep all classes that are involved in Class.forName constructs.
+        // We also keep all classes that are accessed dynamically.
         programClassPool.classesAccept(
             new AllConstantVisitor(
-            new ClassForNameClassVisitor(keepMarker)));
+            new ConstantTagFilter(ClassConstants.CONSTANT_String,
+            new ReferencedClassVisitor(keepMarker))));
+
+        // We also keep all class members that are accessed dynamically.
+        programClassPool.classesAccept(
+            new AllConstantVisitor(
+            new ConstantTagFilter(ClassConstants.CONSTANT_String,
+            new ReferencedMemberVisitor(keepMarker))));
+
+        // We also keep all bootstrap method signatures.
+        programClassPool.classesAccept(
+            new ClassVersionFilter(ClassConstants.CLASS_VERSION_1_7,
+            new AllAttributeVisitor(
+            new AttributeNameFilter(ClassConstants.ATTR_BootstrapMethods,
+            new AllBootstrapMethodInfoVisitor(
+            new BootstrapMethodHandleTraveler(
+            new MethodrefTraveler(
+            new ReferencedMemberVisitor(keepMarker))))))));
+
+        // We also keep all bootstrap method arguments that point to methods.
+        // These arguments are typically the method handles for
+        // java.lang.invoke.LambdaMetafactory#metafactory, which provides the
+        // implementations for closures.
+        programClassPool.classesAccept(
+            new ClassVersionFilter(ClassConstants.CLASS_VERSION_1_7,
+            new AllAttributeVisitor(
+            new AttributeNameFilter(ClassConstants.ATTR_BootstrapMethods,
+            new AllBootstrapMethodInfoVisitor(
+            new BootstrapMethodArgumentVisitor(
+            new MethodrefTraveler(
+            new ReferencedMemberVisitor(keepMarker))))))));
+
+        // We also keep all classes (and their methods) returned by dynamic
+        // method invocations. They may return dynamic implementations of
+        // interfaces that otherwise appear unused.
+        programClassPool.classesAccept(
+            new ClassVersionFilter(ClassConstants.CLASS_VERSION_1_7,
+            new AllConstantVisitor(
+            new DynamicReturnedClassVisitor(
+            new MultiClassVisitor(new ClassVisitor[]
+            {
+                keepMarker,
+                new AllMemberVisitor(keepMarker)
+            })))));
 
         // Attach some optimization info to all classes and class members, so
         // it can be filled out later.
@@ -287,8 +341,9 @@ public class Optimizer
         {
             // Make methods final, whereever possible.
             programClassPool.classesAccept(
+                new ClassAccessFilter(0, ClassConstants.ACC_INTERFACE,
                 new AllMethodVisitor(
-                new MethodFinalizer(methodMarkingFinalCounter)));
+                new MethodFinalizer(methodMarkingFinalCounter))));
         }
 
         if (fieldRemovalWriteonly)
@@ -313,12 +368,64 @@ public class Optimizer
                 new ReadWriteFieldMarker()));
         }
 
+        if (classUnboxingEnum)
+        {
+             ClassCounter counter = new ClassCounter();
+
+            // Mark all final enums that qualify as simple enums.
+            programClassPool.classesAccept(
+                new ClassAccessFilter(ClassConstants.ACC_FINAL |
+                                      ClassConstants.ACC_ENUM, 0,
+                new SimpleEnumClassChecker()));
+
+            // Count the preliminary number of simple enums.
+            programClassPool.classesAccept(
+                new SimpleEnumFilter(counter));
+
+            // Only continue checking simple enums if there are any candidates.
+            if (counter.getCount() > 0)
+            {
+                // Unmark all simple enums that are explicitly used as objects.
+                programClassPool.classesAccept(
+                    new SimpleEnumUseChecker());
+
+                // Count the definitive number of simple enums.
+                programClassPool.classesAccept(
+                    new SimpleEnumFilter(classUnboxingEnumCounter));
+
+                // Only start handling simple enums if there are any.
+                if (classUnboxingEnumCounter.getCount() > 0)
+                {
+                    // Simplify the use of the enum classes in code.
+                    programClassPool.classesAccept(
+                        new AllMethodVisitor(
+                        new AllAttributeVisitor(
+                        new SimpleEnumUseSimplifier())));
+
+                    // Simplify the static initializers of simple enum classes.
+                    programClassPool.classesAccept(
+                        new SimpleEnumFilter(
+                        new SimpleEnumClassSimplifier()));
+
+                    // Simplify the use of the enum classes in descriptors.
+                    programClassPool.classesAccept(
+                        new SimpleEnumDescriptorSimplifier());
+
+                    // Update references to class members with simple enum classes.
+                    programClassPool.classesAccept(new MemberReferenceFixer());
+                }
+            }
+        }
+
         // Mark all used parameters, including the 'this' parameters.
         programClassPool.classesAccept(
             new AllMethodVisitor(
             new OptimizationInfoMemberFilter(
             new ParameterUsageMarker(!methodMarkingStatic,
                                      !methodRemovalParameter))));
+
+        // Mark all classes that have static initializers.
+        programClassPool.classesAccept(new StaticInitializerContainingClassMarker());
 
         // Mark all methods that have side effects.
         programClassPool.accept(new SideEffectMethodMarker());
@@ -327,39 +434,91 @@ public class Optimizer
 //        programClassPool.classAccept("abc/Def", new NamedMethodVisitor("abc", null, new ClassPrinter()));
 
         // Perform partial evaluation for filling out fields, method parameters,
-        // and method return values.
-        ValueFactory valueFactory = new IdentifiedValueFactory();
-
+        // and method return values, so they can be propagated.
         if (fieldPropagationValue      ||
             methodPropagationParameter ||
             methodPropagationReturnvalue)
         {
-            // Fill out fields, method parameters, and return values, so they
-            // can be propagated.
+            // We'll create values to be stored with fields, method parameters,
+            // and return values.
+            ValueFactory valueFactory         = new ParticularValueFactory();
+            ValueFactory detailedValueFactory = new DetailedValueFactory();
+
             InvocationUnit storingInvocationUnit =
                 new StoringInvocationUnit(valueFactory,
                                           fieldPropagationValue,
                                           methodPropagationParameter,
                                           methodPropagationReturnvalue);
 
+            // Evaluate synthetic classes in more detail, notably to propagate
+            // the arrays of the classes generated for enum switch statements.
             programClassPool.classesAccept(
+                new ClassAccessFilter(ClassConstants.ACC_SYNTHETIC, 0,
                 new AllMethodVisitor(
                 new AllAttributeVisitor(
-                new PartialEvaluator(valueFactory, storingInvocationUnit, false))));
+                new PartialEvaluator(detailedValueFactory, storingInvocationUnit, false)))));
 
-            // Count the constant fields and methods.
+            // Evaluate non-synthetic classes.
             programClassPool.classesAccept(
-                new MultiClassVisitor(
-                new ClassVisitor[]
-                {
+                new ClassAccessFilter(0, ClassConstants.ACC_SYNTHETIC,
+                new AllMethodVisitor(
+                new AllAttributeVisitor(
+                new PartialEvaluator(valueFactory, storingInvocationUnit, false)))));
+
+            if (fieldPropagationValue)
+            {
+                // Count the constant fields.
+                programClassPool.classesAccept(
                     new AllFieldVisitor(
-                    new ConstantMemberFilter(fieldPropagationValueCounter)),
+                    new ConstantMemberFilter(fieldPropagationValueCounter)));
+            }
+
+            if (methodPropagationParameter)
+            {
+                // Count the constant method parameters.
+                programClassPool.classesAccept(
                     new AllMethodVisitor(
-                    new ConstantParameterFilter(methodPropagationParameterCounter)),
+                    new ConstantParameterFilter(methodPropagationParameterCounter)));
+            }
+
+            if (methodPropagationReturnvalue)
+            {
+                // Count the constant method return values.
+                programClassPool.classesAccept(
                     new AllMethodVisitor(
-                    new ConstantMemberFilter(methodPropagationReturnvalueCounter)),
-                }));
+                    new ConstantMemberFilter(methodPropagationReturnvalueCounter)));
+            }
+
+            if (classUnboxingEnumCounter.getCount() > 0)
+            {
+                // Propagate the simple enum constant counts.
+                programClassPool.classesAccept(
+                    new SimpleEnumFilter(
+                    new SimpleEnumArrayPropagator()));
+            }
+
+            if (codeSimplificationAdvanced)
+            {
+                // Fill out constants into the arrays of synthetic classes,
+                // notably the arrays of the classes generated for enum switch
+                // statements.
+                InvocationUnit loadingInvocationUnit =
+                    new LoadingInvocationUnit(valueFactory,
+                                              fieldPropagationValue,
+                                              methodPropagationParameter,
+                                              methodPropagationReturnvalue);
+
+                programClassPool.classesAccept(
+                    new ClassAccessFilter(ClassConstants.ACC_SYNTHETIC, 0,
+                    new AllMethodVisitor(
+                    new AllAttributeVisitor(
+                    new PartialEvaluator(valueFactory, loadingInvocationUnit, false)))));
+            }
         }
+
+        // Perform partial evaluation again, now loading any previously stored
+        // values for fields, method parameters, and method return values.
+        ValueFactory valueFactory = new IdentifiedValueFactory();
 
         InvocationUnit loadingInvocationUnit =
             new LoadingInvocationUnit(valueFactory,
@@ -408,7 +567,7 @@ public class Optimizer
             programClassPool.classesAccept(
                 new AllMethodVisitor(
                 new OptimizationInfoMemberFilter(
-                new MemberAccessFilter(0, ClassConstants.INTERNAL_ACC_STATIC,
+                new MemberAccessFilter(0, ClassConstants.ACC_STATIC,
                 new MethodStaticizer(methodMarkingStaticCounter)))));
         }
 
@@ -418,6 +577,12 @@ public class Optimizer
             // This operation also updates the stack sizes.
             programClassPool.classesAccept(
                 new MemberReferenceFixer());
+
+            // Remove unused bootstrap method arguments.
+            programClassPool.classesAccept(
+                new AllAttributeVisitor(
+                new AllBootstrapMethodInfoVisitor(
+                new BootstrapMethodArgumentShrinker())));
         }
 
         if (methodRemovalParameter ||
@@ -441,17 +606,39 @@ public class Optimizer
                 new StackSizeUpdater())));
         }
 
-//        // Specializing the class member descriptors seems to increase the
-//        // class file size, on average.
-//        // Specialize all class member descriptors.
-//        programClassPool.classesAccept(new AllMemberVisitor(
-//                                       new OptimizationInfoMemberFilter(
-//                                       new MemberDescriptorSpecializer())));
-//
-//        // Fix all references to classes, for MemberDescriptorSpecializer.
-//        programClassPool.classesAccept(new AllMemberVisitor(
-//                                       new OptimizationInfoMemberFilter(
-//                                       new ClassReferenceFixer(true))));
+        if (methodRemovalParameter &&
+            methodRemovalParameterCounter.getCount() > 0)
+        {
+            // Tweak the descriptors of duplicate initializers, due to removed
+            // method parameters.
+            programClassPool.classesAccept(
+                new AllMethodVisitor(
+                new DuplicateInitializerFixer(initializerFixCounter1)));
+
+            if (initializerFixCounter1.getCount() > 0)
+            {
+                // Fix all invocations of tweaked initializers.
+                programClassPool.classesAccept(
+                    new AllMethodVisitor(
+                    new AllAttributeVisitor(
+                    new DuplicateInitializerInvocationFixer(addedCounter))));
+
+                // Fix all references to tweaked initializers.
+                programClassPool.classesAccept(new MemberReferenceFixer());
+            }
+        }
+
+        //// Specializing the class member descriptors seems to increase the
+        //// class file size, on average.
+        //// Specialize all class member descriptors.
+        //programClassPool.classesAccept(new AllMemberVisitor(
+        //                               new OptimizationInfoMemberFilter(
+        //                               new MemberDescriptorSpecializer())));
+        //
+        //// Fix all references to classes, for MemberDescriptorSpecializer.
+        //programClassPool.classesAccept(new AllMemberVisitor(
+        //                               new OptimizationInfoMemberFilter(
+        //                               new ClassReferenceFixer(true))));
 
         // Mark all classes with package visible members.
         // Mark all exception catches of methods.
@@ -461,13 +648,13 @@ public class Optimizer
             new MultiClassVisitor(
             new ClassVisitor[]
             {
+                new PackageVisibleMemberContainingClassMarker(),
                 new AllConstantVisitor(
                 new PackageVisibleMemberInvokingClassMarker()),
                 new AllMethodVisitor(
                 new MultiMemberVisitor(
                 new MemberVisitor[]
                 {
-                    new PackageVisibleMemberContainingClassMarker(),
                     new AllAttributeVisitor(
                     new MultiAttributeVisitor(
                     new AttributeVisitor[]
@@ -482,6 +669,7 @@ public class Optimizer
                             new DotClassMarker(),
                             new MethodInvocationMarker(),
                             new SuperInvocationMarker(),
+                            new DynamicInvocationMarker(),
                             new BackwardBranchMarker(),
                             new AccessMethodMarker(),
                         })),
@@ -495,7 +683,8 @@ public class Optimizer
 
         if (classMergingVertical)
         {
-            // Merge classes into their superclasses or interfaces.
+            // Merge subclasses up into their superclasses or
+            // merge interfaces down into their implementing classes.
             programClassPool.classesAccept(
                 new VerticalClassMerger(configuration.allowAccessModification,
                                         configuration.mergeInterfacesAggressively,
@@ -511,8 +700,8 @@ public class Optimizer
                                           classMergingHorizontalCounter));
         }
 
-        if (classMergingVertical ||
-            classMergingHorizontal)
+        if (classMergingVerticalCounter  .getCount() > 0 ||
+            classMergingHorizontalCounter.getCount() > 0)
         {
             // Clean up inner class attributes to avoid loops.
             programClassPool.classesAccept(new RetargetedInnerClassAttributeRemover());
@@ -527,21 +716,22 @@ public class Optimizer
                 // Fix the access flags of referenced merged classes and their
                 // class members.
                 programClassPool.classesAccept(
-                    new AllConstantVisitor(
-                    new AccessFixer()));
+                    new AccessFixer());
             }
-        }
 
-        if (methodRemovalParameter ||
-            classMergingVertical   ||
-            classMergingHorizontal)
-        {
-            // Tweak the descriptors of duplicate initializers.
+            // Fix the access flags of the inner classes information.
+            programClassPool.classesAccept(
+                new AllAttributeVisitor(
+                new AllInnerClassesInfoVisitor(
+                new InnerClassesAccessFixer())));
+
+            // Tweak the descriptors of duplicate initializers, due to merged
+            // parameter classes.
             programClassPool.classesAccept(
                 new AllMethodVisitor(
-                new DuplicateInitializerFixer(initializerFixCounter)));
+                new DuplicateInitializerFixer(initializerFixCounter2)));
 
-            if (initializerFixCounter.getCount() > 0)
+            if (initializerFixCounter2.getCount() > 0)
             {
                 // Fix all invocations of tweaked initializers.
                 programClassPool.classesAccept(
@@ -595,42 +785,41 @@ public class Optimizer
                 new NonPrivateMemberMarker());
         }
 
-        if (fieldMarkingPrivate ||
-            methodMarkingPrivate)
+        if (fieldMarkingPrivate)
         {
             // Make all non-private fields private, whereever possible.
             programClassPool.classesAccept(
+                new ClassAccessFilter(0, ClassConstants.ACC_INTERFACE,
                 new AllFieldVisitor(
-                new MemberAccessFilter(0, ClassConstants.INTERNAL_ACC_PRIVATE,
-                new MemberPrivatizer(fieldMarkingPrivateCounter))));
+                new MemberAccessFilter(0, ClassConstants.ACC_PRIVATE,
+                new MemberPrivatizer(fieldMarkingPrivateCounter)))));
         }
 
         if (methodMarkingPrivate)
         {
             // Make all non-private methods private, whereever possible.
             programClassPool.classesAccept(
-                new ClassAccessFilter(0, ClassConstants.INTERNAL_ACC_INTERFACE,
+                new ClassAccessFilter(0, ClassConstants.ACC_INTERFACE,
                 new AllMethodVisitor(
-                new MemberAccessFilter(0, ClassConstants.INTERNAL_ACC_PRIVATE,
+                new MemberAccessFilter(0, ClassConstants.ACC_PRIVATE,
                 new MemberPrivatizer(methodMarkingPrivateCounter)))));
         }
 
-        if ((methodInliningUnique ||
-             methodInliningShort  ||
-             methodInliningTailrecursion) &&
+        if ((methodInliningUniqueCounter       .getCount() > 0 ||
+             methodInliningShortCounter        .getCount() > 0 ||
+             methodInliningTailrecursionCounter.getCount() > 0) &&
             configuration.allowAccessModification)
         {
             // Fix the access flags of referenced classes and class members,
             // for MethodInliner.
             programClassPool.classesAccept(
-                new AllConstantVisitor(
-                new AccessFixer()));
+                new AccessFixer());
         }
 
-        if (methodRemovalParameter ||
-            classMergingVertical   ||
-            classMergingHorizontal ||
-            methodMarkingPrivate)
+        if (methodRemovalParameterCounter .getCount() > 0 ||
+            classMergingVerticalCounter   .getCount() > 0 ||
+            classMergingHorizontalCounter .getCount() > 0 ||
+            methodMarkingPrivateCounter   .getCount() > 0 )
         {
             // Fix invocations of interface methods, of methods that have become
             // non-abstract or private, and of methods that have moved to a
@@ -707,6 +896,15 @@ public class Optimizer
                 new GotoReturnReplacer(codeAttributeEditor, codeSimplificationBranchCounter));
         }
 
+        if (codeSimplificationString)
+        {
+            // Peephole optimizations involving branches.
+            peepholeOptimizations.add(
+                new InstructionSequencesReplacer(InstructionSequenceConstants.CONSTANTS,
+                                                 InstructionSequenceConstants.STRING,
+                                                 branchTargetFinder, codeAttributeEditor, codeSimplificationStringCounter));
+        }
+
         if (!peepholeOptimizations.isEmpty())
         {
             // Convert the list into an array.
@@ -749,14 +947,6 @@ public class Optimizer
                 new AllAttributeVisitor(
                 new VariableShrinker(codeRemovalVariableCounter))));
         }
-        else
-        {
-            // Clean up all unused local variables.
-            programClassPool.classesAccept(
-                new AllMethodVisitor(
-                new AllAttributeVisitor(
-                new VariableCleaner())));
-        }
 
         if (codeAllocationVariable)
         {
@@ -767,7 +957,13 @@ public class Optimizer
                 new VariableOptimizer(false, codeAllocationVariableCounter))));
         }
 
+
+        // Remove unused constants.
+        programClassPool.classesAccept(
+            new ConstantPoolShrinker());
+
         int classMarkingFinalCount            = classMarkingFinalCounter           .getCount();
+        int classUnboxingEnumCount            = classUnboxingEnumCounter           .getCount();
         int classMergingVerticalCount         = classMergingVerticalCounter        .getCount();
         int classMergingHorizontalCount       = classMergingHorizontalCounter      .getCount();
         int fieldRemovalWriteonlyCount        = fieldRemovalWriteonlyCounter       .getCount();
@@ -776,7 +972,7 @@ public class Optimizer
         int methodMarkingPrivateCount         = methodMarkingPrivateCounter        .getCount();
         int methodMarkingStaticCount          = methodMarkingStaticCounter         .getCount();
         int methodMarkingFinalCount           = methodMarkingFinalCounter          .getCount();
-        int methodRemovalParameterCount       = methodRemovalParameterCounter      .getCount() - methodMarkingStaticCounter.getCount() - initializerFixCounter.getCount();
+        int methodRemovalParameterCount       = methodRemovalParameterCounter      .getCount() - methodMarkingStaticCounter.getCount() - initializerFixCounter1.getCount() - initializerFixCounter2.getCount();
         int methodPropagationParameterCount   = methodPropagationParameterCounter  .getCount();
         int methodPropagationReturnvalueCount = methodPropagationReturnvalueCounter.getCount();
         int methodInliningShortCount          = methodInliningShortCounter         .getCount();
@@ -788,15 +984,27 @@ public class Optimizer
         int codeSimplificationCastCount       = codeSimplificationCastCounter      .getCount();
         int codeSimplificationFieldCount      = codeSimplificationFieldCounter     .getCount();
         int codeSimplificationBranchCount     = codeSimplificationBranchCounter    .getCount();
+        int codeSimplificationStringCount     = codeSimplificationStringCounter    .getCount();
         int codeSimplificationAdvancedCount   = codeSimplificationAdvancedCounter  .getCount();
         int codeRemovalCount                  = deletedCounter                     .getCount() - addedCounter.getCount();
         int codeRemovalVariableCount          = codeRemovalVariableCounter         .getCount();
         int codeRemovalExceptionCount         = codeRemovalExceptionCounter        .getCount();
         int codeAllocationVariableCount       = codeAllocationVariableCounter      .getCount();
 
+        // Forget about constant fields, parameters, and return values, if they
+        // didn't lead to any useful optimizations. We want to avoid fruitless
+        // additional optimization passes.
+        if (codeSimplificationAdvancedCount == 0)
+        {
+            fieldPropagationValueCount        = 0;
+            methodPropagationParameterCount   = 0;
+            methodPropagationReturnvalueCount = 0;
+        }
+
         if (configuration.verbose)
         {
             System.out.println("  Number of finalized classes:                 " + classMarkingFinalCount            + disabled(classMarkingFinal));
+            System.out.println("  Number of unboxed enum classes:              " + classUnboxingEnumCount            + disabled(classUnboxingEnum));
             System.out.println("  Number of vertically merged classes:         " + classMergingVerticalCount         + disabled(classMergingVertical));
             System.out.println("  Number of horizontally merged classes:       " + classMergingHorizontalCount       + disabled(classMergingHorizontal));
             System.out.println("  Number of removed write-only fields:         " + fieldRemovalWriteonlyCount        + disabled(fieldRemovalWriteonly));
@@ -817,6 +1025,7 @@ public class Optimizer
             System.out.println("  Number of cast peephole optimizations:       " + codeSimplificationCastCount       + disabled(codeSimplificationCast));
             System.out.println("  Number of field peephole optimizations:      " + codeSimplificationFieldCount      + disabled(codeSimplificationField));
             System.out.println("  Number of branch peephole optimizations:     " + codeSimplificationBranchCount     + disabled(codeSimplificationBranch));
+            System.out.println("  Number of string peephole optimizations:     " + codeSimplificationStringCount     + disabled(codeSimplificationString));
             System.out.println("  Number of simplified instructions:           " + codeSimplificationAdvancedCount   + disabled(codeSimplificationAdvanced));
             System.out.println("  Number of removed instructions:              " + codeRemovalCount                  + disabled(codeRemovalAdvanced));
             System.out.println("  Number of removed local variables:           " + codeRemovalVariableCount          + disabled(codeRemovalVariable));
@@ -825,6 +1034,7 @@ public class Optimizer
         }
 
         return classMarkingFinalCount            > 0 ||
+               classUnboxingEnumCount            > 0 ||
                classMergingVerticalCount         > 0 ||
                classMergingHorizontalCount       > 0 ||
                fieldRemovalWriteonlyCount        > 0 ||
@@ -845,6 +1055,7 @@ public class Optimizer
                codeSimplificationCastCount       > 0 ||
                codeSimplificationFieldCount      > 0 ||
                codeSimplificationBranchCount     > 0 ||
+               codeSimplificationStringCount     > 0 ||
                codeSimplificationAdvancedCount   > 0 ||
                codeRemovalCount                  > 0 ||
                codeRemovalVariableCount          > 0 ||

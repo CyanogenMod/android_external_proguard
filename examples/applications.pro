@@ -15,30 +15,39 @@
 #-libraryjars jai_core.jar
 #...
 
+# Save the obfuscation mapping to a file, so you can de-obfuscate any stack
+# traces later on. Keep a fixed source file attribute and all line number
+# tables to get line numbers in the stack traces.
+# You can comment this out if you're not interested in stack traces.
+
+-printmapping out.map
+-renamesourcefileattribute SourceFile
+-keepattributes SourceFile,LineNumberTable
+
+# Preserve all annotations.
+
+-keepattributes *Annotation*
+
+# You can print out the seeds that are matching the keep options below.
+
+#-printseeds out.seeds
+
 # Preserve all public applications.
 
 -keepclasseswithmembers public class * {
     public static void main(java.lang.String[]);
 }
 
-# Print out a list of what we're preserving.
-
--printseeds
-
-# Preserve all annotations.
-
--keepattributes *Annotation*
-
 # Preserve all native method names and the names of their classes.
 
--keepclasseswithmembernames class * {
+-keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
 }
 
 # Preserve the special static methods that are required in all enumeration
 # classes.
 
--keepclassmembers class * extends java.lang.Enum {
+-keepclassmembers,allowoptimization enum * {
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }

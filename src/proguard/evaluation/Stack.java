@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -21,6 +21,8 @@
 package proguard.evaluation;
 
 import proguard.evaluation.value.*;
+
+import java.util.Arrays;
 
 /**
  * This class represents an operand stack that contains <code>Value</code>
@@ -77,7 +79,7 @@ public class Stack
     public void reset(int maxSize)
     {
         // Is the values array large enough?
-        if (maxSize > values.length)
+        if (values.length < maxSize)
         {
             // Create a new one.
             values = new Value[maxSize];
@@ -96,7 +98,7 @@ public class Stack
     public void copy(Stack other)
     {
         // Is the values array large enough?
-        if (other.values.length > values.length)
+        if (values.length < other.values.length)
         {
             // Create a new one.
             values = new Value[other.values.length];
@@ -163,10 +165,7 @@ public class Stack
     public void clear()
     {
         // Clear the stack contents.
-        for (int index = 0; index < currentSize; index++)
-        {
-            values[index] = null;
-        }
+        Arrays.fill(values, 0, currentSize, null);
 
         currentSize = 0;
     }

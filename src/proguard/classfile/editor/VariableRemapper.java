@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -22,6 +22,10 @@ package proguard.classfile.editor;
 
 import proguard.classfile.*;
 import proguard.classfile.attribute.*;
+import proguard.classfile.attribute.annotation.*;
+import proguard.classfile.attribute.annotation.target.*;
+import proguard.classfile.attribute.annotation.target.visitor.*;
+import proguard.classfile.attribute.annotation.visitor.TypeAnnotationVisitor;
 import proguard.classfile.attribute.visitor.*;
 import proguard.classfile.instruction.*;
 import proguard.classfile.instruction.visitor.InstructionVisitor;
@@ -38,8 +42,14 @@ extends      SimplifiedVisitor
 implements   AttributeVisitor,
              InstructionVisitor,
              LocalVariableInfoVisitor,
-             LocalVariableTypeInfoVisitor
+             LocalVariableTypeInfoVisitor,
+             TypeAnnotationVisitor,
+             TargetInfoVisitor,
+             LocalVariableTargetElementVisitor
 {
+    private static final boolean DEBUG = false;
+
+
     private final CodeAttributeEditor codeAttributeEditor = new CodeAttributeEditor();
 
     private int[] variableMap;
@@ -60,8 +70,37 @@ implements   AttributeVisitor,
     public void visitAnyAttribute(Clazz clazz, Attribute attribute) {}
 
 
+    public void visitMethodParametersAttribute(Clazz clazz, Method method, MethodParametersAttribute methodParametersAttribute)
+    {
+        // Reorder the array with parameter information.
+        ParameterInfo[] oldParameters = methodParametersAttribute.parameters;
+        ParameterInfo[] newParameters =
+            new ParameterInfo[methodParametersAttribute.u1parametersCount];
+
+        for (int index = 0; index < methodParametersAttribute.u1parametersCount; index++)
+        {
+            newParameters[remapVariable(index)] = oldParameters[index];
+        }
+
+        methodParametersAttribute.parameters = newParameters;
+    }
+
+
     public void visitCodeAttribute(Clazz clazz, Method method, CodeAttribute codeAttribute)
     {
+        if (DEBUG)
+        {
+            System.out.println("VariableRemapper: "+clazz.getName()+"."+method.getName(clazz)+method.getDescriptor(clazz));
+            for (int index= 0; index < codeAttribute.u2maxLocals; index++)
+            {
+                System.out.println("  v"+index+" -> "+variableMap[index]);
+            }
+        }
+
+        // Remap the variables of the attributes, before editing the code and
+        // cleaning up its local variable frame.
+        codeAttribute.attributesAccept(clazz, method, this);
+
         // Initially, the code attribute editor doesn't contain any changes.
         codeAttributeEditor.reset(codeAttribute.u4codeLength);
 
@@ -70,9 +109,6 @@ implements   AttributeVisitor,
 
         // Apply the code atribute editor.
         codeAttributeEditor.visitCodeAttribute(clazz, method, codeAttribute);
-
-        // Remap the variables of the attributes.
-        codeAttribute.attributesAccept(clazz, method, this);
     }
 
 
@@ -80,11 +116,6 @@ implements   AttributeVisitor,
     {
         // Remap the variable references of the local variables.
         localVariableTableAttribute.localVariablesAccept(clazz, method, codeAttribute, this);
-
-        // Remove local variables that haven't been mapped.
-        localVariableTableAttribute.u2localVariableTableLength =
-            removeEmptyLocalVariables(localVariableTableAttribute.localVariableTable,
-                                      localVariableTableAttribute.u2localVariableTableLength);
     }
 
 
@@ -92,11 +123,13 @@ implements   AttributeVisitor,
     {
         // Remap the variable references of the local variables.
         localVariableTypeTableAttribute.localVariablesAccept(clazz, method, codeAttribute, this);
+    }
 
-        // Remove local variables that haven't been mapped.
-        localVariableTypeTableAttribute.u2localVariableTypeTableLength =
-            removeEmptyLocalVariableTypes(localVariableTypeTableAttribute.localVariableTypeTable,
-                                          localVariableTypeTableAttribute.u2localVariableTypeTableLength);
+
+    public void visitAnyTypeAnnotationsAttribute(Clazz clazz, TypeAnnotationsAttribute typeAnnotationsAttribute)
+    {
+        // Remap the variable references of local variable type annotations.
+        typeAnnotationsAttribute.typeAnnotationsAccept(clazz, this);
     }
 
 
@@ -118,6 +151,34 @@ implements   AttributeVisitor,
     }
 
 
+    // Implementations for TypeAnnotationVisitor.
+
+    public void visitTypeAnnotation(Clazz clazz, TypeAnnotation typeAnnotation)
+    {
+        typeAnnotation.targetInfoAccept(clazz, this);
+    }
+
+
+    // Implementations for TargetInfoVisitor.
+
+    public void visitAnyTargetInfo(Clazz clazz, TypeAnnotation typeAnnotation, TargetInfo targetInfo) {}
+
+
+    public void visitLocalVariableTargetInfo(Clazz clazz, Method method, CodeAttribute codeAttribute, TypeAnnotation typeAnnotation, LocalVariableTargetInfo localVariableTargetInfo)
+    {
+        localVariableTargetInfo.targetElementsAccept(clazz, method, codeAttribute, typeAnnotation, this);
+    }
+
+
+    // Implementations for LocalVariableTargetElementVisitor.
+
+    public void visitLocalVariableTargetElement(Clazz clazz, Method method, CodeAttribute codeAttribute, TypeAnnotation typeAnnotation, LocalVariableTargetInfo localVariableTargetInfo, LocalVariableTargetElement localVariableTargetElement)
+    {
+        localVariableTargetElement.u2index  =
+            remapVariable(localVariableTargetElement.u2index);
+    }
+
+
     // Implementations for InstructionVisitor.
 
     public void visitAnyInstruction(Clazz clazz, Method method, CodeAttribute codeAttribute, int offset, Instruction instruction) {}
@@ -134,7 +195,7 @@ implements   AttributeVisitor,
             Instruction replacementInstruction =
                 new VariableInstruction(variableInstruction.opcode,
                                         newVariableIndex,
-                                        variableInstruction.constant).shrink();
+                                        variableInstruction.constant);
 
             codeAttributeEditor.replaceInstruction(offset, replacementInstruction);
         }
@@ -149,49 +210,5 @@ implements   AttributeVisitor,
     private int remapVariable(int variableIndex)
     {
         return variableMap[variableIndex];
-    }
-
-
-    /**
-     * Returns the given list of local variables, without the ones that have
-     * been removed.
-     */
-    private int removeEmptyLocalVariables(LocalVariableInfo[] localVariableInfos,
-                                          int                 localVariableInfoCount)
-    {
-        // Overwrite all empty local variable entries.
-        int newIndex = 0;
-        for (int index = 0; index < localVariableInfoCount; index++)
-        {
-            LocalVariableInfo localVariableInfo = localVariableInfos[index];
-            if (localVariableInfo.u2index >= 0)
-            {
-                localVariableInfos[newIndex++] = localVariableInfo;
-            }
-        }
-
-        return newIndex;
-    }
-
-
-    /**
-     * Returns the given list of local variable types, without the ones that
-     * have been removed.
-     */
-    private int removeEmptyLocalVariableTypes(LocalVariableTypeInfo[] localVariableTypeInfos,
-                                              int                     localVariableTypeInfoCount)
-    {
-        // Overwrite all empty local variable type entries.
-        int newIndex = 0;
-        for (int index = 0; index < localVariableTypeInfoCount; index++)
-        {
-            LocalVariableTypeInfo localVariableTypeInfo = localVariableTypeInfos[index];
-            if (localVariableTypeInfo.u2index >= 0)
-            {
-                localVariableTypeInfos[newIndex++] = localVariableTypeInfo;
-            }
-        }
-
-        return newIndex;
     }
 }

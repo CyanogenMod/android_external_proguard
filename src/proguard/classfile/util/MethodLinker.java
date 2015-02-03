@@ -2,7 +2,7 @@
  * ProGuard -- shrinking, optimization, obfuscation, and preverification
  *             of Java bytecode.
  *
- * Copyright (c) 2002-2009 Eric Lafortune (eric@graphics.cornell.edu)
+ * Copyright (c) 2002-2015 Eric Lafortune @ GuardSquare
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -26,16 +26,11 @@ import proguard.classfile.visitor.*;
 import java.util.*;
 
 /**
- * This ClassVisitor links all corresponding non-private methods in the class
- * hierarchies of all visited classes. Visited classes are typically all class
- * files that are not being subclassed. Chains of links that have been created
- * in previous invocations are merged with new chains of links, in order to
- * create a consistent set of chains.
- * <p>
- * As a MemberVisitor, it links all corresponding class members that it visits,
- * including fields and private class members.
- * <p>
- * Class initialization methods and constructors are always ignored.
+ * This ClassVisitor links all corresponding non-private, non-static,
+ * non-initializer methods in the class hierarchies of all visited classes.
+ * Visited classes are typically all class files that are not being subclassed.
+ * Chains of links that have been created in previous invocations are merged
+ * with new chains of links, in order to create a consistent set of chains.
  *
  * @author Eric Lafortune
  */
@@ -56,7 +51,7 @@ implements   ClassVisitor,
         // Collect all non-private members in this class hierarchy.
         clazz.hierarchyAccept(true, true, true, false,
             new AllMethodVisitor(
-            new MemberAccessFilter(0, ClassConstants.INTERNAL_ACC_PRIVATE,
+            new MemberAccessFilter(0, ClassConstants.ACC_PRIVATE | ClassConstants.ACC_STATIC,
             this)));
 
         // Clean up for the next class hierarchy.
@@ -74,8 +69,7 @@ implements   ClassVisitor,
 
         // Special cases: <clinit> and <init> are always kept unchanged.
         // We can ignore them here.
-        if (name.equals(ClassConstants.INTERNAL_METHOD_NAME_CLINIT) ||
-            name.equals(ClassConstants.INTERNAL_METHOD_NAME_INIT))
+        if (ClassUtil.isInitializer(name))
         {
             return;
         }
