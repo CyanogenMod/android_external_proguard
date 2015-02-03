@@ -21,4 +21,4 @@ fi
 
 PROGUARD_HOME=`dirname "$PROGUARD"`/..
 
-java -jar "$PROGUARD_HOME/lib/proguard.jar" "$@"
++java -Xmx512M -jar "$PROGUARD_HOME"/lib/proguard.jar "$@"
